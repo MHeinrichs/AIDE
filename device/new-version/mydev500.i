@@ -60,6 +60,18 @@ MD_NUMUNITS EQU   $2
    UWORD    mdu_motor            ;motor status
    ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
    ULONG    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
+
+;now some stuff for automount
+   APTR		hu_Addr			points to shared per-ID data
+   UBYTE	hu_ATDriveBit		hu_Unit << AT_UNIT_SHIFT
+   UBYTE	hu_MountDone		1 = partitions mounted
+   UBYTE	hu_LUN			logical unit number for SCSI
+   ULONG	hu_BlockSize		byte size of one block
+   UWORD	hu_BlockShift		shift for divide by blocksize
+   UBYTE	hu_Flags		flags from RDB
+   APTR		hu_RDB			RigidDiskBlock data
+   UWORD	hu_TotalMapped		number of mapped blocks
+   APTR		hu_BadBlockList		list of mapped bad blocks
    LABEL    MyDevUnit_Sizeof
 
 ;drive types
@@ -77,7 +89,7 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.17 (09.11.2013)",13,10,0
+      dc.b    "IDEDevice 2.19 (25.10.2014)",13,10,0
       ENDM
 
 VERSION equ 2

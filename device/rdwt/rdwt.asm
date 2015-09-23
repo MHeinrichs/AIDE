@@ -42,19 +42,18 @@ TRUE  equ   1
 
 FALSE equ   0
 
-LOOP  equ   150000      ; timeout value for ATA - motor is on
+LOOP  equ   30000      ; timeout value for ATA - motor is on
 
-LOOP2 equ   5000000     ; timeout value for ATA - motor is off
+LOOP2 equ   2500000     ; timeout value for ATA - motor is off
 
-LOOP3 equ   10000       ; timeout value for ATAPI
+LOOP3 equ   20000       ; timeout value for ATAPI
 
 
 
    cnop  0,4
 
-   PUBLIC   buffer
 
-buffer         ds.b  512      ;buffer for ATA/ATAPI IDENTIFY DRIVE
+buffer         dc.l  0        ;buffer pointer for ATA/ATAPI IDENTIFY DRIVE
 
 
 
@@ -77,6 +76,8 @@ buffer         ds.b  512      ;buffer for ATA/ATAPI IDENTIFY DRIVE
    include "exec/libraries.i"
 
    include "exec/devices.i"
+   
+   include "exec/memory.i"
 
    include "exec/io.i"
 
@@ -93,8 +94,12 @@ buffer         ds.b  512      ;buffer for ATA/ATAPI IDENTIFY DRIVE
    include "INTERFACEI:"   ; defines hardware dependent stuff such as task file....
 
    include "/lib/ata.i"    ; defines ATA bits and commands
+   
+   include "/lib/asmsupp.i"; Various helpers from Commodore
 
-
+   XLIB AllocMem
+   
+   XLIB FreeMem
 
 
 
@@ -126,11 +131,24 @@ InitDrive   ;a3 = unitptr
 
    movem.l  a0/a1/a5,-(sp)
 
+   move.l   #512,d0       ; we want 512 bytes for a buffer
+   
+   move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared
+   
+   LINKSYS  AllocMem,md_SysLib(a6)
+   
+   tst.l    d0             ; memory ok?
+   
+   beq      wfc1
+   
+   move.l   d0,buffer      ;save pointer
+   
+
    RATABYTE TF_STATUS,d0   ;clear drive interrupt line
 
-   move.b   #FALSE,mdu_firstcall(a3)
+   move.w   #FALSE,mdu_firstcall(a3)
 
-   cmp.b    #TRUE,mdu_auto(a3)
+   cmp.w    #TRUE,mdu_auto(a3)
 
    bne      notauto
 
@@ -138,7 +156,7 @@ InitDrive   ;a3 = unitptr
 
 ;get drive parameters
 
-   move.b   #FALSE,mdu_lba(a3)               ;presumption
+   move.w   #FALSE,mdu_lba(a3)               ;presumption
 
    bsr      SelectDrive
 
@@ -168,7 +186,7 @@ InitDrive   ;a3 = unitptr
 
 wfc1
 
-   move.b   #UNKNOWN_DRV,mdu_drv_type(a3)
+   move.w   #UNKNOWN_DRV,mdu_drv_type(a3)
 
    bra      kr2
 
@@ -180,9 +198,9 @@ wfc2
 
    beq      wfc1
 
-   move.b   #ATAPI_DRV,mdu_drv_type(a3)
+   move.w   #ATAPI_DRV,mdu_drv_type(a3)
 
-   move.b   #TRUE,mdu_lba(a3)
+   move.w   #TRUE,mdu_lba(a3)
 
    clr.l    mdu_sectors_per_track(a3)
 
@@ -194,15 +212,15 @@ wfc2
 
 atadrv
 
-   move.b   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
+   move.w   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 
 kr3
 
-   lea      buffer,a5                  ;get identify data
+   move.l   buffer,a5                  ;get identify data
 
    bsr      readdata
 
-   lea      buffer,a5
+   move.l   buffer,a5
 
    ;IF Y=0 SWAP BYTES IN WORD BECAUSE AMIGA DATA0..7 IS DRIVE DATA8.15
 
@@ -236,7 +254,7 @@ lk    move.w   (a0),d1
 
 
 
-   lea      buffer,a5            ;copy serial number to internal info buffer
+   move.l   buffer,a5            ;copy serial number to internal info buffer
 
    add.l    #20,a5
 
@@ -254,7 +272,7 @@ ckl1
 
    move.b   #0,(a0)
 
-   lea      buffer,a5
+   move.l   buffer,a5
 
    add.l    #46,a5
 
@@ -272,7 +290,7 @@ ckl2
 
    move.b   #0,(a0)
 
-   lea      buffer,a5
+   move.l   buffer,a5
 
    add.l    #54,a5
 
@@ -292,7 +310,7 @@ ckl3
 
 
 
-   cmp.b    #ATA_DRV,mdu_drv_type(a3)
+   cmp.w    #ATA_DRV,mdu_drv_type(a3)
 
    beq      noeritd
 
@@ -302,7 +320,7 @@ ckl3
 
 noeritd     ; ATA disk
 
-   lea      buffer,a5
+   move.l   buffer,a5
 
    moveq    #0,d0
 
@@ -338,13 +356,13 @@ noeritd     ; ATA disk
 
    beq      nolba                ;propably no lba support if no lba sectors
 
-   move.b   #TRUE,mdu_lba(a3)    ;store to internal buffer
+   move.w   #TRUE,mdu_lba(a3)    ;store to internal buffer
 
    bra      endauto
 
 nolba                            ;Then its CHS
 
-   move.b   #FALSE,mdu_lba(a3)   ;store to internal buffer
+   move.w   #FALSE,mdu_lba(a3)   ;store to internal buffer
 
    ;Conner Peripherals CP3044 lies about its default translation mode
 
@@ -386,7 +404,7 @@ notauto
 
    RATABYTE TF_STATUS,d0               ;clear interrupt line
 
-   cmp.b    #ATA_DRV,mdu_drv_type(a3)
+   cmp.w    #ATA_DRV,mdu_drv_type(a3)
 
    bne      kr2
 
@@ -419,7 +437,17 @@ pis1
    bsr      waitnotbusy1
 
 kr2
+   move.l   buffer,d1 ;is there a pointer in buffer?
+   tst.l    d1
+   beq kr21
+   
+   move.l   buffer,a1
+   move.l   #512,d0
+   LINKSYS FreeMem,md_SysLib(a6)
+   
 
+kr21:
+   move.l   #0,buffer
    movem.l  (sp)+,a0/a1/a5
 
    rts
@@ -528,7 +556,7 @@ errcode
 
    bset.b   #1,$bfe001        ;Amiga power led off
 
-   cmp.b    #ATA_DRV,mdu_drv_type(a3)
+   cmp.w    #ATA_DRV,mdu_drv_type(a3)
 
    bne      Quits
 
@@ -872,7 +900,7 @@ readdata
 
 issueread
 
-   cmp.b    #TRUE,mdu_lba(a3)
+   cmp.w    #TRUE,mdu_lba(a3)
 
    beq      issueLBAread
 
@@ -948,7 +976,7 @@ writedata
 
 issuewrite
 
-   cmp.b    #TRUE,mdu_lba(a3)
+   cmp.w    #TRUE,mdu_lba(a3)
 
    beq      issueLBAwrite
 
@@ -1294,13 +1322,13 @@ sdc9
 
    and.b    #$F,d0
 
-   clr.w    mdu_no_disk(a3)
+   clr.l    mdu_no_disk(a3)
 
    cmp.b    #2,d0
 
    bne      sdc91
 
-   move.w   #1,mdu_no_disk(a3)      ;medium is not present
+   move.l   #1,mdu_no_disk(a3)      ;medium is not present
 
 sdc91
 

@@ -495,7 +495,7 @@ Open_UnitOK:
 
    ;If the IDE drive has not been initialised previously, do it now
 
-   cmp.b    #TRUE,mdu_firstcall(a3)
+   cmp.w    #TRUE,mdu_firstcall(a3)
 
    bne      nav1
 
@@ -503,10 +503,10 @@ Open_UnitOK:
 
 nav1
 
-   move.b   #FALSE,mdu_firstcall(a3)
-;   cmp.b    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type
+   move.w   #FALSE,mdu_firstcall(a3)
+   cmp.w    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type
 
-;	 beq      Open_Error                     ; unknowns cannot be opened!
+   beq      Open_Error                     ; unknowns cannot be opened!
 
    moveq    #0,d0
 
@@ -519,7 +519,7 @@ Open_End
    rts
 
 Open_Error:
-
+   bsr      FreeUnit
    moveq    #IOERR_OPENFAIL,d0
    move.b   d0,IO_ERROR(a2)
    move.l   d0,IO_DEVICE(a2)    ;IMPORTANT: trash IO_DEVICE on open failure
@@ -544,7 +544,7 @@ Close:      ;( device:a6, iob:a1 )
 
    ;------ make sure the iob is not used again
 
-   moveq    #-1,d0
+   moveq    #IOERR_OPENFAIL,d0
 
    move.l   d0,IO_UNIT(a2)
 
@@ -568,7 +568,7 @@ Close_Device:
 
    ;------ mark us as having one fewer openers
 
-   moveq    #0,d0
+   moveq.l  #0,d0
 
 ;  subq.w   #1,LIB_OPENCNT(a6)
 
@@ -710,11 +710,10 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    LINKSYS  AllocMem,md_SysLib(a6)
 
+   move.l   d0,a3
    tst.l    d0
 
    beq      InitUnit_End
-
-   move.l   d0,a3
 
    move.l   d2,mdu_UnitNum(a3)      ;initialize unit number
 
@@ -730,7 +729,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    move.l   a1,MP_SIGTASK(a3)
 
-   moveq    #0,d0                   ;Dont need to re-zero it
+   moveq.l  #0,d0                   ;Dont need to re-zero it
 
    move.l   a3,a2                   ;InitStruct is initializing the UNIT
 
@@ -758,13 +757,13 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    ;------ default values
 
-   move.b   #UNKNOWN_DRV,mdu_drv_type(a3)
+   move.w   #UNKNOWN_DRV,mdu_drv_type(a3)
 
-   move.b   #TRUE,mdu_firstcall(a3)
+   move.w   #TRUE,mdu_firstcall(a3)
 
-   move.b   #TRUE,mdu_auto(a3)
+   move.w   #TRUE,mdu_auto(a3)
 
-   move.b   #FALSE,mdu_lba(a3)
+   move.w   #FALSE,mdu_lba(a3)
 
    move.l   #0,mdu_sectors_per_track(a3)
 
@@ -774,11 +773,11 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    move.l   #0,mdu_numlba(a3)
 
-   move.w   #FALSE,mdu_motor(a3)
+   move.w   #TRUE,mdu_motor(a3)     ;units usually start up with motor on
 
    move.l   #0,mdu_change_cnt(a3)
 
-   move.w   #FALSE,mdu_no_disk(a3)
+   move.l   #FALSE,mdu_no_disk(a3)
 
 
 
@@ -810,12 +809,14 @@ InitUnit_FreeUnit:
 
 FreeUnit:   ;( a3:unitptr, a6:deviceptr )
 
+   tst.l    (a3)   ;valid pointer
+   beq FreeUnit_End 
    move.l   a3,a1
 
    move.l   #MyDevUnit_Sizeof,d0
 
    LINKSYS  FreeMem,md_SysLib(a6)
-
+FreeUnit_End:
    rts
 
 
@@ -1140,7 +1141,7 @@ TermIO_End:
 
 ChangeNum:
 
-   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.w    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      ClrIOActual
 
@@ -1154,11 +1155,11 @@ ChangeNum:
 
 ChangeState:
 
-   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.w    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      ClrIOActual
 
-   move.w   mdu_no_disk(a3),IO_ACTUAL(a1)
+   move.l   mdu_no_disk(a3),IO_ACTUAL(a1)
 
    bsr      TermIO
 
@@ -1175,8 +1176,9 @@ MyCMD:
 MyMotor:                               ;park drive heads and stop motor
 
    move.l   d0,-(sp)
-
-   move.w   mdu_motor(a3),IO_ACTUAL(a1)
+   
+   move.w   mdu_motor(a3),d0
+   move.l   d0,IO_ACTUAL(a1)			;copy a long to IO_ACTUAL(a1)
 
    tst.l    IO_LENGTH(a1)
 
@@ -1238,7 +1240,7 @@ MyError:
 
 SCSIDirect     ;( iob:a1, unitptr:a3, devptr:a6 )
 
-   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.w    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      EmulateSCSI
 
@@ -1694,7 +1696,7 @@ drwf
 
 
 
-   cmp.b    #ATA_DRV,mdu_drv_type(a3)
+   cmp.w    #ATA_DRV,mdu_drv_type(a3)
 
    bne      Sec_Error            ; (ATARdWt) only for ATA drives,
 
