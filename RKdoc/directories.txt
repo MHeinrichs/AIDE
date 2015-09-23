@@ -1,0 +1,7 @@
+
+Titles: directory with audio CD track names for CD player3.
+       Set <homedir> parameter of PlayCD command to path,
+       where this directory is stored.
+        Example
+        : if "Titles" directory is in Music:, then start CD
+          player with this line: "PlayCD Music:"

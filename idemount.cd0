@@ -1,0 +1,10 @@
+^CD0:
+   Handler = L:cdrom-handler
+   Stacksize = 10000
+   Priority = 10
+   GlobVec = -1
+   Mount = 1
+   Startup = "DEVICE-ide.device-UNIT-%d-PC=s:playcd_im"
+#
+
+^

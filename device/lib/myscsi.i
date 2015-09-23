@@ -1,0 +1,13 @@
+    STRUCTURE SCSI,0
+   APTR		scsi_Data
+   ULONG		scsi_Length
+   ULONG		scsi_Actual
+   APTR		scsi_Command
+   UWORD		scsi_CmdLength
+   UWORD		scsi_CmdActual
+	UBYTE		scsi_Flags
+	UBYTE		scsi_Status
+	APTR		scsi_SenseData
+	UWORD		scsi_SenseLength
+	UWORD		scsi_SenseActual
+   LABEL    SCSI_Sizeof
