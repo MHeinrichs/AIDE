@@ -805,7 +805,7 @@ escsi13
    bra      escsi4
 scsi_cap                               ; Read Recorded Capacity packet
    cmp.w    #CHS_ACCESS,mdu_lba(a3)
-   bra 		chscapa
+   beq 		chscapa
    move.l   mdu_numlba(a3),d0
    cmp.w    #LBA28_ACCESS,mdu_lba(a3)
    beq 		setcapa

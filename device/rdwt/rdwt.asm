@@ -332,10 +332,10 @@ multiple_sector_dis
 
    beq      nolba
 
-   move.w   60*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
+   move.w   61*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
 
    swap.l   d0
-   or.w     61*2(a5),d0
+   or.w     60*2(a5),d0
    move.l   d0,mdu_numlba(a3)    ;store to internal buffer
 
    beq      nolba                ;propably no lba support if no lba sectors
