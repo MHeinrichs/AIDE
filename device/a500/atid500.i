@@ -40,6 +40,31 @@ WATAWORD macro
    move.w \1,\2
  endm
 
+RATADATAA5_D0_BYTES_64 macro
+   move.l   #TF_DATA,a0
+   ;d0 must be < $0002000
+   lsr.l    #6,d0;bytes to long and loop unrolling: 8 times
+   sub.l    #1,d0;for dbra
+gre2\@
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   dbra     d0,gre2\@
+  endm
+
 RATADATAA5_D0_BYTES macro
    move.l   #TF_DATA,a0
    ;d0 must be < $0002000
@@ -49,6 +74,31 @@ gre\@
    move.w   (a0),(a5)+
    dbra     d0,gre\@
   endm
+
+WATADATAA5_D0_BYTES_64 macro
+   move.l   #TF_DATA,a0
+   lsr.l    #6,d0;bytes to long and loop unrolling: 8 times
+   sub.l    #1,d0
+cva2\@
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   dbra     d0,cva2\@
+ endm
+
 
 WATADATAA5_D0_BYTES macro
    move.l   #TF_DATA,a0
