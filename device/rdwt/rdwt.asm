@@ -96,24 +96,6 @@ buffer         ds.b  512      ;buffer for ATA/ATAPI IDENTIFY DRIVE
 
 
 
-DLY400NS macro
-
-   tst.b    $000004  ;access to exec base (Chip RAM) should last at least 4 times 140ns = 560ns
-
-  endm
-
-DLY5US macro ;wait atleast 5 microseconds
-
-   tst.b    $bfe301 ;slow CIA access cycle should take at least 1.4 us
-
-   tst.b    $bfe301
-
-   tst.b    $bfe301
-
-   tst.b    $bfe301
-
-  endm
-
 
 
 ;some of the 32-bit longword error codes rdwt.asm returns:
@@ -146,9 +128,9 @@ InitDrive   ;a3 = unitptr
 
    RATABYTE TF_STATUS,d0   ;clear drive interrupt line
 
-   move.l   #FALSE,mdu_firstcall(a3)
+   move.b   #FALSE,mdu_firstcall(a3)
 
-   cmp.l    #TRUE,mdu_auto(a3)
+   cmp.b    #TRUE,mdu_auto(a3)
 
    bne      notauto
 
@@ -156,7 +138,7 @@ InitDrive   ;a3 = unitptr
 
 ;get drive parameters
 
-   move.l   #FALSE,mdu_lba(a3)               ;presumption
+   move.b   #FALSE,mdu_lba(a3)               ;presumption
 
    bsr      SelectDrive
 
@@ -186,7 +168,7 @@ InitDrive   ;a3 = unitptr
 
 wfc1
 
-   move.l   #UNKNOWN_DRV,mdu_drv_type(a3)
+   move.b   #UNKNOWN_DRV,mdu_drv_type(a3)
 
    bra      kr2
 
@@ -198,9 +180,9 @@ wfc2
 
    beq      wfc1
 
-   move.l   #ATAPI_DRV,mdu_drv_type(a3)
+   move.b   #ATAPI_DRV,mdu_drv_type(a3)
 
-   move.l   #TRUE,mdu_lba(a3)
+   move.b   #TRUE,mdu_lba(a3)
 
    clr.l    mdu_sectors_per_track(a3)
 
@@ -212,7 +194,7 @@ wfc2
 
 atadrv
 
-   move.l   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
+   move.b   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 
 kr3
 
@@ -310,7 +292,7 @@ ckl3
 
 
 
-   cmp.l    #ATA_DRV,mdu_drv_type(a3)
+   cmp.b    #ATA_DRV,mdu_drv_type(a3)
 
    beq      noeritd
 
@@ -322,7 +304,7 @@ noeritd     ; ATA disk
 
    lea      buffer,a5
 
-   clr.l    d0
+   moveq    #0,d0
 
    move.w   1*2(a5),d0           ;Word 1 Number of logical cylinders
 
@@ -356,13 +338,13 @@ noeritd     ; ATA disk
 
    beq      nolba                ;propably no lba support if no lba sectors
 
-   move.l   #TRUE,mdu_lba(a3)    ;store to internal buffer
+   move.b   #TRUE,mdu_lba(a3)    ;store to internal buffer
 
    bra      endauto
 
-nolba                            ;Then it's CHS
+nolba                            ;Then its CHS
 
-   move.l   #FALSE,mdu_lba(a3)   ;store to internal buffer
+   move.b   #FALSE,mdu_lba(a3)   ;store to internal buffer
 
    ;Conner Peripherals CP3044 lies about its default translation mode
 
@@ -404,7 +386,7 @@ notauto
 
    RATABYTE TF_STATUS,d0               ;clear interrupt line
 
-   cmp.l    #ATA_DRV,mdu_drv_type(a3)
+   cmp.b    #ATA_DRV,mdu_drv_type(a3)
 
    bne      kr2
 
@@ -546,7 +528,7 @@ errcode
 
    bset.b   #1,$bfe001        ;Amiga power led off
 
-   cmp.l    #ATA_DRV,mdu_drv_type(a3)
+   cmp.b    #ATA_DRV,mdu_drv_type(a3)
 
    bne      Quits
 
@@ -830,7 +812,7 @@ waitreadytoacceptnewcommand
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      fovc
 
@@ -890,7 +872,7 @@ readdata
 
 issueread
 
-   cmp.l    #TRUE,mdu_lba(a3)
+   cmp.b    #TRUE,mdu_lba(a3)
 
    beq      issueLBAread
 
@@ -966,7 +948,7 @@ writedata
 
 issuewrite
 
-   cmp.l    #TRUE,mdu_lba(a3)
+   cmp.b    #TRUE,mdu_lba(a3)
 
    beq      issueLBAwrite
 
@@ -1094,7 +1076,7 @@ SelectDrive:
 
    beq      sdr1
 
-   clr.l    d0
+   moveq    #0,d0
 
    RATABYTE TF_DRIVE_HEAD,d0
 
@@ -1126,7 +1108,7 @@ SelectDrive:
 
    move.l   #LOOP,d0
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      sdr4
 
@@ -1312,13 +1294,13 @@ sdc9
 
    and.b    #$F,d0
 
-   clr.l    mdu_no_disk(a3)
+   clr.w    mdu_no_disk(a3)
 
    cmp.b    #2,d0
 
    bne      sdc91
 
-   move.l   #1,mdu_no_disk(a3)      ;medium is not present
+   move.w   #1,mdu_no_disk(a3)      ;medium is not present
 
 sdc91
 
@@ -1490,7 +1472,7 @@ pa6
 
    beq      pa10                       ;skip if no data
 
-   clr.l    d3
+   moveq    #0,d3
 
    RATABYTE TF_CYLINDER_HIGH,d3        ;else read data length
 
@@ -1626,13 +1608,13 @@ waitdrq1
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      wd
 
    move.l   #LOOP2,d1
 
-wd DLY5US
+wd DLY3US
 
    subq.l   #1,d1
 
@@ -1664,13 +1646,13 @@ waitdrdy1
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      dr
 
    move.l   #LOOP2,d1
 
-dr DLY5US
+dr DLY3US
 
    subq.l   #1,d1
 
@@ -1702,13 +1684,13 @@ waitnotbusy1
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      wn
 
    move.l   #LOOP2,d1
 
-wn DLY5US
+wn DLY3US
 
    subq.l   #1,d1
 
@@ -1738,13 +1720,13 @@ waitnotdrq1
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      wq
 
    move.l   #LOOP2,d1
 
-wq DLY5US
+wq DLY3US
 
    subq.l   #1,d1
 
@@ -1772,13 +1754,13 @@ waitbusy1
 
    move.l   #LOOP,d1
 
-   cmp.l    #TRUE,mdu_motor(a3)
+   cmp.w    #TRUE,mdu_motor(a3)
 
    beq      wb
 
    move.l   #LOOP2,d1
 
-wb DLY5US
+wb DLY3US
 
    subq.l   #1,d1
 

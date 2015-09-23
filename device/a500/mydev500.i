@@ -46,10 +46,10 @@ MD_NUMUNITS EQU   $2
    UBYTE    mdu_SigBit           ;Signal bit allocated for interrupts
    UBYTE    mdu_pad
    APTR     mdu_Device
-   ULONG    mdu_drv_type         ;see bellow for possible values
-   ULONG    mdu_firstcall        ;was drive called yet?
-   ULONG    mdu_auto             ;get drive parameters automatic? = TRUE
-   ULONG    mdu_lba              ;use LBA? For ATAPI always TRUE
+   UBYTE    mdu_drv_type         ;see bellow for possible values
+   UBYTE    mdu_firstcall        ;was drive called yet?
+   UBYTE    mdu_auto             ;get drive parameters automatic? = TRUE
+   UBYTE    mdu_lba              ;use LBA? For ATAPI always TRUE
    ULONG    mdu_sectors_per_track   ;only for ATA
    ULONG    mdu_heads            ;only for ATA
    ULONG    mdu_cylinders        ;only for ATA
@@ -57,9 +57,9 @@ MD_NUMUNITS EQU   $2
    STRUCT   mdu_ser_num,22       ;serial number
    STRUCT   mdu_firm_rev,48      ;firware revision
    STRUCT   mdu_model_num,56     ;model number
-   ULONG    mdu_motor            ;motor status
+   UWORD    mdu_motor            ;motor status
    ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
-   ULONG    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
+   UWORD    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
    LABEL    MyDevUnit_Sizeof
 
 ;drive types
@@ -77,11 +77,11 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.14 (06.11.2013)",13,10,0
+      dc.b    "IDEDevice 2.16 (07.11.2013)",13,10,0
       ENDM
 
 VERSION equ 2
-REVISION equ 14
+REVISION equ 16
 
 DOSNAME      MACRO
       DC.B   'dos.library',0

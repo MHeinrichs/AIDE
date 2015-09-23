@@ -160,19 +160,6 @@ _intena  equ   $dff09a ;;;ML
 
 
 
-DLY5US macro ;Wait delay of (atleast) 5 microseconds
-
-   tst.b $bfe301
-
-   tst.b $bfe301
-
-   tst.b $bfe301
-
-   tst.b $bfe301
-
-  endm
-
-
 
 TRUE  equ   1
 
@@ -372,7 +359,7 @@ init1
 
    move.l   d0,unit0sigbit
 
-   clr.l    d1
+   moveq    #0,d1
 
    bset     d0,d1
 
@@ -386,7 +373,7 @@ init1
 
    move.l   d0,unit1sigbit
 
-   clr.l    d1
+   moveq    #0,d1
 
    bset     d0,d1
 
@@ -508,7 +495,7 @@ Open_UnitOK:
 
    ;If the IDE drive has not been initialised previously, do it now
 
-   cmp.l    #TRUE,mdu_firstcall(a3)
+   cmp.b    #TRUE,mdu_firstcall(a3)
 
    bne      nav1
 
@@ -516,9 +503,12 @@ Open_UnitOK:
 
 nav1
 
-   move.l   #FALSE,mdu_firstcall(a3)
+   move.b   #FALSE,mdu_firstcall(a3)
+;   cmp.b    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type
 
-   clr.l    d0
+;	 beq      Open_Error                     ; unknowns cannot be opened!
+
+   moveq    #0,d0
 
 
 
@@ -530,10 +520,10 @@ Open_End
 
 Open_Error:
 
-   move.b   #IOERR_OPENFAIL,IO_ERROR(a2)
-
-   moveq.l  #1,d0
-
+   moveq    #IOERR_OPENFAIL,d0
+   move.b   d0,IO_ERROR(a2)
+   move.l   d0,IO_DEVICE(a2)    ;IMPORTANT: trash IO_DEVICE on open failure
+   
    bra.s    Open_End
 
 
@@ -554,7 +544,7 @@ Close:      ;( device:a6, iob:a1 )
 
    ;------ make sure the iob is not used again
 
-   moveq.l  #-1,d0
+   moveq    #-1,d0
 
    move.l   d0,IO_UNIT(a2)
 
@@ -578,7 +568,7 @@ Close_Device:
 
    ;------ mark us as having one fewer openers
 
-   moveq.l  #0,d0
+   moveq    #0,d0
 
 ;  subq.w   #1,LIB_OPENCNT(a6)
 
@@ -692,7 +682,7 @@ Null:
 
 
 
-unit0mask   dc.l  0                 ;don't change unit#? data order
+unit0mask   dc.l  0                 ;dont change unit#? data order
 
 unit1mask   dc.l  0
 
@@ -740,7 +730,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    move.l   a1,MP_SIGTASK(a3)
 
-   moveq.l  #0,d0                   ;Dont need to re-zero it
+   moveq    #0,d0                   ;Dont need to re-zero it
 
    move.l   a3,a2                   ;InitStruct is initializing the UNIT
 
@@ -768,13 +758,13 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    ;------ default values
 
-   move.l   #UNKNOWN_DRV,mdu_drv_type(a3)
+   move.b   #UNKNOWN_DRV,mdu_drv_type(a3)
 
-   move.l   #TRUE,mdu_firstcall(a3)
+   move.b   #TRUE,mdu_firstcall(a3)
 
-   move.l   #TRUE,mdu_auto(a3)
+   move.b   #TRUE,mdu_auto(a3)
 
-   move.l   #FALSE,mdu_lba(a3)
+   move.b   #FALSE,mdu_lba(a3)
 
    move.l   #0,mdu_sectors_per_track(a3)
 
@@ -784,11 +774,11 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    move.l   #0,mdu_numlba(a3)
 
-   move.l   #FALSE,mdu_motor(a3)
+   move.w   #FALSE,mdu_motor(a3)
 
    move.l   #0,mdu_change_cnt(a3)
 
-   move.l   #FALSE,mdu_no_disk(a3)
+   move.w   #FALSE,mdu_no_disk(a3)
 
 
 
@@ -1150,7 +1140,7 @@ TermIO_End:
 
 ChangeNum:
 
-   cmp.l    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      ClrIOActual
 
@@ -1164,11 +1154,11 @@ ChangeNum:
 
 ChangeState:
 
-   cmp.l    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      ClrIOActual
 
-   move.l   mdu_no_disk(a3),IO_ACTUAL(a1)
+   move.w   mdu_no_disk(a3),IO_ACTUAL(a1)
 
    bsr      TermIO
 
@@ -1186,7 +1176,7 @@ MyMotor:                               ;park drive heads and stop motor
 
    move.l   d0,-(sp)
 
-   move.l   mdu_motor(a3),IO_ACTUAL(a1)
+   move.w   mdu_motor(a3),IO_ACTUAL(a1)
 
    tst.l    IO_LENGTH(a1)
 
@@ -1222,7 +1212,7 @@ MyMotor:                               ;park drive heads and stop motor
 
    RATABYTE TF_STATUS,d0
 
-   move.l   #FALSE,mdu_motor(a3)
+   move.w   #FALSE,mdu_motor(a3)
 
 mtr1
 
@@ -1248,7 +1238,7 @@ MyError:
 
 SCSIDirect     ;( iob:a1, unitptr:a3, devptr:a6 )
 
-   cmp.l    #ATAPI_DRV,mdu_drv_type(a3)
+   cmp.b    #ATAPI_DRV,mdu_drv_type(a3)
 
    bne      EmulateSCSI
 
@@ -1270,7 +1260,7 @@ SCSIDirect     ;( iob:a1, unitptr:a3, devptr:a6 )
 
    move.l   IO_UNIT(a1),a3             ;get unit pointer
 
-   clr.l    d2
+   moveq    #0,d2
 
    move.l   mdu_UnitNum(a3),d2
 
@@ -1368,7 +1358,7 @@ scsi_r6                             ; Read(6) packet
 
    mulu     #512,d1
 
-   clr.l    d0
+   moveq    #0,d0
 
    move.b   4(a0),d0
 
@@ -1404,7 +1394,7 @@ scsi_r6                             ; Read(6) packet
 
 scsi_ms                             ; Mode sense(6) packet
 
-   clr.l    d0
+   moveq    #0,d0
 
    move.b   4(a0),d0 ; allocation length
 
@@ -1704,7 +1694,7 @@ drwf
 
 
 
-   cmp.l    #ATA_DRV,mdu_drv_type(a3)
+   cmp.b    #ATA_DRV,mdu_drv_type(a3)
 
    bne      Sec_Error            ; (ATARdWt) only for ATA drives,
 
@@ -1728,7 +1718,7 @@ drwf
 
    jsr      ATARdWt
 
-   move.l   #TRUE,mdu_motor(a3)  ; Motor will turn on
+   move.w   #TRUE,mdu_motor(a3)  ; Motor will turn on
 
 RdWt_Clean:
 
