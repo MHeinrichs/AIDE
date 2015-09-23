@@ -740,7 +740,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    move.l   a1,MP_SIGTASK(a3)
 
-   moveq.l  #0,d0                   ;Don't need to re-zero it
+   moveq.l  #0,d0                   ;Dont need to re-zero it
 
    move.l   a3,a2                   ;InitStruct is initializing the UNIT
 
@@ -958,7 +958,7 @@ cmdtable_end:
 
 ; The immediate commands are Invalid, Reset, Stop, Start, Flush
 
-;; (BIT MASKS ARE OR'ed HERE. (max 32 commands then, by the way.)
+;; (BIT MASKS ARE ORed HERE. (max 32 commands then, by the way.)
 
 IMMEDIATES  EQU   $200001C3
 
@@ -1622,7 +1622,7 @@ td64_seek64 ;ML
 
 Remove:
 
-ProtStatus:                      ; Indicate drive isn't protected
+ProtStatus:                      ; Indicate drive isnt protected
 
 ClrIOActual:
 
@@ -1636,7 +1636,7 @@ ClrIOActual:
 
 GetDriveType:
 
-   move.l   #1,IO_ACTUAL(a1)     ; Make it look like 3.5"
+   move.l   #1,IO_ACTUAL(a1)     ; Make it look like 3.5 inch
 
    bsr      TermIO
 
