@@ -77,11 +77,11 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.17 (09.11.2013)",13,10,0
+      dc.b    "IDEDevice 2.19 (20.09.2015)",13,10,0
       ENDM
 
 VERSION equ 2
-REVISION equ 17
+REVISION equ 19
 
 DOSNAME      MACRO
       DC.B   'dos.library',0

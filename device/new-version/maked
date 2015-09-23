@@ -1,5 +1,4 @@
-ASSIGN MYDEVI: mydev500.i     ;name of the driver etc..
-ASSIGN INTERFACEI: atid500.i  ;macros that access IDE registers
+ASSIGN IDE_BASE_ADDRESS: IDE_BASE_ADDRESS.i  ;the base address
 
 
 assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
@@ -7,8 +6,9 @@ assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
 /bin/a68k -ii: /rdwt/rdwt.asm ; read/write routines of device
 /bin/dlink -o ide.device /dev/dev.o /rdwt/rdwt.o /lib/amiga.lib
 
+/bin/a68k -ii: /dev/bootstrap.asm   ; main source of boot device
+/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/rdwt.o /lib/amiga.lib
 
-assign mydevi: remove
-assign interfacei: remove
+assign IDE_BASE_ADDRESS: remove
 assign i: remove
 

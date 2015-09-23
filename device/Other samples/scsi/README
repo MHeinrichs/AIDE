@@ -1,0 +1,200 @@
+August 13, 1990.
+
+Hello all, this is a distribution of my tape stuff to those who asked.
+Just in case it gets distributed more widely later, I'll call this version
+0.1.  If you get the stuff working, please mail me with your experiences,
+particularly if it's with a tape controller or embedded SCSI drive that I
+haven't tried it with.  If it turns out to work unmodified with all sorts
+of SCSI tape drives, a regular PD distribution with better documentation
+may be called for.
+
+The source files are for Manx 3.6b.  Just type "make" to compile everything.
+For other compilers or other versions of Manx, varying amounts of work
+may be required.
+
+First, a word about SCSIdirect.  The SCSIdirect protocol allows an I/O device
+to transfer less data than you requested.  The device driver will return
+the number of bytes actually transferred to you.  It took some work to get
+this right in my SCSIdirect code, while maintaining acceptable performance
+without DMA (I eventually got the transfer loop down to 5 instructions per
+byte moved).  The tape handler uses this capability!  If there is a half-
+baked SCSIdirect implementation out there that blows up if the exact amount
+of data that you requested isn't transferred (my much faster disk code works
+that way), tough noodles, the TAPE: system won't work without major
+modifications.
+
+DTEST
+-----
+
+Dtest is the program I wrote to test my SCSIdirect implementation.  It turns
+out to be quite handy for other things, so I include it here.
+
+To use dtest, first find out the name of your SCSI device driver, and the
+appropriate unit number and open flags for the I/O device you wish to access.
+Then run dtest, and give it this data.  Data appropriate for my hard disk
+are given as defaults.  Then, the following prompt appears:
+
+    [V]iew [E]nter [F]ill [C]ommand e[X]ecute [P]recooked [Q]uit ?
+
+You enter a SCSI command with the "C" option.  This will prompt you for
+the following:
+
+    scsi_Length
+    scsi_CmdLength
+    scsi_Flags
+
+These are parts of the SCSI command structure for the SCSIdirect protocol.
+The first entry is the maximum number of bytes you wish transferred in
+the data phase.  The next is the number of command bytes you have available.
+The last is the flag byte.  Currently you set this to "1" for reading, or
+"0" for writing.  The automatic request sense option in the latest version
+of the SCSIdirect standard is not supported by this program.
+
+After entering these three values, you can enter the appropriate number of
+command bytes.  The previous values of everything is given as defaults, so
+to make a change, simply use the "C" option again and type new values where
+appropriate, or press RETURN to keep the old ones.
+
+Note that the data address of the SCSI command is always set to the 32K
+buffer maintained by dtest, and the default data length is 32K bytes.
+
+A number of precooked commands are available with the "P" option.  When you
+have entered a command via "C" or chosen a precooked one, you can execute
+it with "X".  The error number (from the device driver) and status byte
+(from the SCSI device) are displayed on completion of the command.
+
+With the "V" option, you can view all the current variables.  These are
+the data length, the number of bytes transferred by the last command, the
+command length, the number of command bytes accepted on the last command,
+the flags byte, the most recent status byte and error number, and the
+command buffer.  When these have been displayed, the program asks for a
+buffer address, in hex.  This may be from $0 to $7FFF.  The buffer is then
+displayed, a page at a time.  After each page, you can continue or go to
+a new buffer address.
+
+Finally, with "F", you can fill the buffer with a pattern, and with "E" you
+can modify the data in it.
+
+WARNING:  There's nothing to stop you from reformatting or otherwise trashing
+your hard disk using "dtest".   Be careful if you don't know what you're
+doing.
+
+TAPE HANDLER
+------------
+
+To install this one, copy "tape-handler" to your L: directory, and install
+the mountlist fragment given into your "devs:mountlist" file.  Edit the
+mountlist as shown in the comments, to include the correct open information
+for your SCSI interface and target device, and buffer size.
+
+Now you can try it out.  If your tape system is connected and working, don't
+put a tape into the drive, and type "copy tape: nil:".  If a requester
+appears saying "Tape unit not ready", that's good news.  Now put a tape in
+and try again.  If the tape starts running and the command finishes without
+an error, you are probably in business.  If a requester appears saying that
+a tape read error has occurred, you may still be OK.
+
+The tape handler can be opened as plain "TAPE:" (or whatever else you call
+it in the mountlist; the name is not hard-coded), or as "TAPE:REWIND" (only
+the "R" is mandatory), or as "TAPE:APPEND" (only the "A" is mandatory).
+Multiple files can be stored on the tape.  Each file is one or more tape
+blocks of 512 bytes; the last block is padded out with zeros.  Files are
+separated with file marks, with blank tape after the last one.  Here's an
+example of copying files onto and off the tape.
+
+    mount tape:
+
+    (insert tape, if your controller is like mine it will autoload it
+    and rewind it)
+
+    copy file1 tape:
+    copy file2 tape:
+    copy file3 tape:
+    copy tape: file4     /* fails */
+    copy tape:r file4    /* rewinds, makes a copy of file1 */
+    copy file5 tape:     /* skips to end, appends file5 after file3 */
+    copy tape:r file6    /* makes a copy of file1 */
+    copy tape: file7     /* makes a copy of file2 */
+    copy file8 tape:r    /* rewinds, erases tape, records file8 */
+
+You get the picture.  You only need the "append" mode if you've just
+inserted or rewound a tape and wish to write a file at the end of it,
+rather than at the beginning.
+
+Compatibility:
+
+The tape driver is known to work with an Emulex MT-02, and a Western Digital
+ADSI-T100 tape controller.  Both of these are QIC-24 controllers, and
+autoload a tape that is inserted into the drive.  The driver was not targeted
+at anything other than the Emulex, but the fact that it works unchanged
+with the Western Digital is encouraging, and may mean it works with other
+equipment too.  Please let me know.
+
+The tape driver is known to work with my own implementation of SCSIdirect.
+This has been tested against Commodore's by me mailing "dtest" to owners of
+Commodore equipment to try.  It worked.  I think the tape driver has been
+used with a 2090A connected to an Emulex, but I'm not sure if it worked 100%.
+
+Pitfalls:
+
+The code is a hack.  There are no comments in it, and the logic is convoluted
+in places.  On the other hand it does work, having been used extensively.
+Good luck modifying it if it doesn't work for you.
+
+Once the handler starts up, it stays running and keeps the buffer allocated.
+You need a large buffer for good performance, and on my 1-meg machine, losing
+256K hurts.  The handler could be modified to free the buffer and exit when
+it is closed, to be started up again by the system when opened again.
+
+TAR
+---
+
+I assume you know how to use "tar".  It's powerful and fast, and very
+suitable for backing up a hard disk.  If you don't know how to use it, these
+two commands will get you started:
+
+    (Create archive)  tar cvf <archive> <file/directory list>
+    (Extract archive) tar xvf <archive> <optional file/directory list>
+
+For example, if my current directory is the root directory of the hard disk,
+and I wish to back up the directories "work" and "temp", and the file
+"testfile", I would use this command:
+
+    tar cvf tape: work temp testfile
+
+Tar takes care of recursively gathering everything in directories it is
+asked to archive.  Say my work directory has a subdirectory called "current",
+and I wished to extract just that, I would use this command:
+
+    tar xvf tape: work/current
+
+Normally, I back up my hard disk, which has two partitions named "DH0" and
+"DH2", with this command:
+
+    tar cvf tape: dh0: dh2:
+
+I could restore the whole thing by just typing
+
+    tar xvf tape:
+
+You get the picture.  You can also copy the tar archive off the tape without
+using tar, and then use tar on the file, for example:
+
+    tar cvf tape: ""
+    copy tape:r hugefile
+    tar xvf hugefile
+
+For more information, read the manual for tar.
+
+That's it.  I will now package everything up and attempt to mail it to the
+eight people who have asked for it (so far).  Please get back to me with
+your experiences!  I can't afford the time to get this working on everybody's
+system, but the effort of sending it out should deserve a bit of feedback.
+
+I am taking all this stuff to the Unix machine at work on a tape...
+
+Greetings,
+Markus Wandel
+uunet!bnrgate!bnr-rsc!mwandel
+(613) 721-6431
+(705) 736-2285 between Aug. 18 and Sept. 3, 1990.

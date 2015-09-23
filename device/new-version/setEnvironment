@@ -1,5 +1,5 @@
-ASSIGN MYDEVI: workb:Programming/AIDE/device/new-version/mydev500.i     ;name of the driver etc..
-ASSIGN INTERFACEI: workb:Programming/aide/device/new-version/atid500.i  ;macros that access IDE registers
+ASSIGN MYDEVI: :Programming/AIDE/device/new-version/mydev500.i     ;name of the driver etc..
+ASSIGN INTERFACEI: :Programming/aide/device/new-version/atid500.i  ;macros that access IDE registers
 
 
 ;assign i: Workb:devpac/INCLUDE

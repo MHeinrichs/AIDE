@@ -65,23 +65,17 @@ MD_NUMUNITS EQU   $2
    UBYTE    mdu_Pad				 ;padding for 32bit alignment
    LABEL    MyDevUnit_Sizeof
 
-;now some stuff for automount
-   APTR		hu_Addr			points to shared per-ID data
-   UBYTE	hu_ATDriveBit		hu_Unit << AT_UNIT_SHIFT
-   UBYTE	hu_MountDone		1 = partitions mounted
-   UBYTE	hu_LUN			logical unit number for SCSI
-   ULONG	hu_BlockSize		byte size of one block
-   UWORD	hu_BlockShift		shift for divide by blocksize
-   UBYTE	hu_Flags		flags from RDB
-   APTR		hu_RDB			RigidDiskBlock data
-   UWORD	hu_TotalMapped		number of mapped blocks
-   APTR		hu_BadBlockList		list of mapped bad blocks
-   LABEL    MyDevUnit_Sizeof
-
 ;drive types
 ATA_DRV     equ   0
 ATAPI_DRV   equ   1
 UNKNOWN_DRV equ   2
+SATA_DRV     equ  3
+SATAPI_DRV   equ  4
+
+;access types
+CHS_ACCESS equ 0
+LBA28_ACCESS equ 1
+LBA48_ACCESS equ 2
 
    ;------ state bit for unit stopped
    BITDEF   MDU,STOPPED,2
@@ -93,11 +87,11 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.18 (20.09.2015)",13,10,0
+      dc.b    "IDEDevice 2.19 (23.09.2015)",13,10,0
       ENDM
 
 VERSION equ 2
-REVISION equ 18
+REVISION equ 19
 
 DOSNAME      MACRO
       DC.B   'dos.library',0
