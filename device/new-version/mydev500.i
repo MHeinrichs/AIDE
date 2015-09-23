@@ -89,7 +89,7 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.19 (25.10.2014)",13,10,0
+      dc.b    "IDEDevice 2.17 (25.10.2014)",13,10,0
       ENDM
 
 VERSION equ 2
