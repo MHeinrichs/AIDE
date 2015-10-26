@@ -42,11 +42,11 @@ TRUE  equ   1
 
 FALSE equ   0
 
-LOOP  equ   30000      ; timeout value for ATA - motor is on
+LOOP  equ   120000      ; timeout value for ATA - motor is on
 
 LOOP2 equ   2500000     ; timeout value for ATA - motor is off
 
-LOOP3 equ   20000       ; timeout value for ATAPI
+LOOP3 equ   100000       ; timeout value for ATAPI
 
 
 
