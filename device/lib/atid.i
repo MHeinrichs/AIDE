@@ -40,6 +40,18 @@ WATAWORD macro
    move.w \1,\2
  endm
 
+WAITNOTDRQ macro
+   move.l   #LOOP,/1
+wqd\@ DLY3US
+   subq.l   #1,/2
+   beq      wqd1\@
+   RATABYTE TF_ALTERNATE_STATUS,/1
+   and.b    #DRQ,d0
+   bne      wqd\@
+wqd1\@
+   tst.l    /2
+ endm
+
 
 ;read macros
 RATADATAA5_D0_BYTES_64 macro
