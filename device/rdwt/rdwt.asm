@@ -20,10 +20,6 @@ WRITEOPE equ $babecafe
 
 TRUE  equ   1
 FALSE equ   0
-LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   256000      ; timeout value for ATA - motor is on
-LOOP2 equ   2560000     ; timeout value for ATA - motor is off
-LOOP3 equ   256000       ; timeout value for ATAPI
 
 
    xref  _LVOAllocSignal      ;external references
@@ -69,7 +65,7 @@ NOREADWRITE equ "PILU"
 
    PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
-   movem.l  a0/a1/a5,-(sp)
+   movem.l  d1/d2/d3/a0/a1/a5,-(sp)
 
 ;get memory
    move.l   #512,d0       ; we want 512 bytes for a buffer   
@@ -87,7 +83,7 @@ InitDrive   ;a3 = unitptr
    bsr      SelectDrive	
 	 beq			wfc1														 ;no drive present!
    WATABYTE #ATA_IDENTIFY_DRIVE,TF_COMMAND   ;get drive data
-   bsr      waitnotbusy1
+   WAITNOTBSY D1,D2
    beq      wfc1
    RATABYTE TF_STATUS,d0
    ;some atapi drives do NOT aboard this command: just read the CYLH/L Values
@@ -128,7 +124,7 @@ atapi
    move.w   #ATAPI_DRV,mdu_drv_type(a3)
 wfc2
    WATABYTE #IDENTIFY_PACKET_DEVICE,TF_COMMAND  ;get atapi drive data
-   bsr      waitdrq1
+   WAITDRQ  D1,D2
    beq      wfc1
    RATABYTE TF_STATUS,d0               ;clear interrupt line
    move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
@@ -276,7 +272,7 @@ pis1
    DLY400NS
    bsr      waitreadytoacceptnewcommand
    WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-   bsr      waitnotbusy1
+   WAITNOTBSY d1,d2
 kr2
    move.l   buffer,d1 ;is there a pointer in buffer?
    tst.l    d1
@@ -288,7 +284,7 @@ kr2
    
 kr21:
    move.l   #0,buffer
-   movem.l  (sp)+,a0/a1/a5
+   movem.l  (sp)+,d1/d2/d3/a0/a1/a5
    rts
 ;----
 
@@ -356,7 +352,7 @@ errcode
    WATABYTE #8+nIEN,TF_DEVICE_CONTROL
    bsr      pause
    bclr.b   #1,$bfe001        ;Amiga power led on
-   bsr      waitnotbusy1
+   WAITNOTBSY D0,D1
    move.l   #1,d0
    bra      okcode
 
@@ -370,9 +366,9 @@ doblocks    ;d7=sectors>0 (A5=startaddress, d6=startblock)
 ;   move.l   #NOREADWRITE,d0
 ;   rts
 gsfg
-   movem.l  d6-d7/a5,-(sp)
+   movem.l  d2-d7/a5,-(sp)
    bsr      dorwv                ;first read or write/format
-   movem.l  (sp)+,d6-d7/a5
+   movem.l  (sp)+,d2-d7/a5
    cmp.l    #0,d0
    rts
 dorwv
@@ -451,9 +447,9 @@ readsectors ;d4 is the number of sectors to read (between 1 and 64)
 readnextblk
    DLY400NS                      ;wait for BSY go high (400 ns)
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
-   bsr      waitnotbusy1
+   WAITNOTBSY D2,D3
    beq      rsfl
-   bsr      waitdrq1
+   WAITDRQ	D2,D3
    beq      rsfl
    move.l	#512,d0
    RATADATAA5_D0_BYTES_64
@@ -476,12 +472,12 @@ writesectors ;d4 is the number of sectors to write (between 1 and 64)
    bsr      issuewrite
    sub.l    #1,d4				 ;for dbne   
 writenextoneblockki
-   bsr      waitdrq1
+   WAITDRQ	D2,D3
    beq      wekfha
    bsr      writedata
    DLY5US                        ;BSY will go high within 5 microseconds after filling buffer
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
-   bsr      waitnotbusy1
+   WAITNOTBSY D2,D3
    beq      wekfha
    bsr      checkforerrors
    cmp.l    #0,d0
@@ -493,7 +489,7 @@ wekfha
    rts                           ;some error in writing
 
 checkforerrors
-   bsr      waitnotbusy1
+   WAITNOTBSY D2,D3
    beq      cfe1
    RATABYTE TF_ALTERNATE_STATUS,d0
    and.l    #DWF+ERR,d0
@@ -503,7 +499,7 @@ cfe1
    rts
 
 waitreadytoacceptnewcommand
-   move.l   d1,-(sp)
+   movem.l  d1-d2,-(sp)
    move.l   #LOOP,d1
    cmp.w    #TRUE,mdu_motor(a3)
    beq      fovc
@@ -511,21 +507,21 @@ waitreadytoacceptnewcommand
 fovc
    subq.l   #1,d1
    beq      wre1
-   bsr      waitnotbusy1
+   WAITNOTBSY D0,D2
    beq      wre1
    RATABYTE TF_STATUS,d0
    and.b    #BSY+DRDY+DWF+ERR,d0
    cmp.b    #DRDY,d0
    bne      oiuy
    move.l   #0,d0
-   move.l   (sp)+,d1
+   movem.l  (sp)+,d1-d2
    rts
 oiuy
    DLY5US   ; make a processor speed independent minimum delay
    and.b    #DWF+ERR,d0
    beq      fovc
 wre1
-   move.l   (sp)+,d1
+   movem.l  (sp)+,d1-d2
    move.l   #-865,d0
    rts
 
@@ -691,9 +687,9 @@ SelectDrive:
    cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
    beq      sdr3              ; just return from subroutine
    
-   bsr      waitnotbusy1
+   WAITNOTBSY d0,d1
    beq      sdr1
-   bsr      waitnotdrq1
+   WAITNOTDRQ d0,d1
    beq      sdr1
    cmp.w    #TRUE,mdu_firstcall(a3) ;select drive on first call for safety
    beq			sdr5
@@ -727,9 +723,9 @@ sdr4
    DLY5US
    bra      sdr4
 sdr2
-   bsr      waitnotbusy1
+   WAITNOTBSY d0,d1
    beq      sdr1
-   bsr      waitnotdrq1
+   WAITNOTDRQ d0,d1
    beq      sdr1
 sdr3
    moveq.l  #1,d0                ; clear zero flag
@@ -780,7 +776,7 @@ sdc5
    bne      sdc1
    WATABYTE #$08,TF_COMMAND         ;then reset atapi device
    DLY400NS
-   bsr      waitnotbusy1
+   WAITNOTBSY d1,d2
    bra      sdc2
 sdc1                                ;read sense data if error
    lea      sense_data,a5
@@ -827,12 +823,12 @@ sdc2
 
 ;send packet to atapi drive and read/write data if needed
 Packet
-   movem.l  a0-a4/d0-d6,-(sp)
+   movem.l  a0-a4/d0-d7,-(sp)
    clr.l    act_Actual
    DLY400NS
-   bsr      waitnotbusy1               ;wait till drive is not ready
+   WAITNOTBSY D0,D7               ;wait till drive is not ready
    beq      pretec
-   bsr      waitnotdrq1
+   WAITNOTDRQ D0,D7
    beq      pretec
    lsl.b    #4,d2
    or.b     #$a0,d2
@@ -843,11 +839,11 @@ Packet
    lsr.w    #8,d1
    WATABYTE d1,TF_CYLINDER_HIGH
    WATABYTE #nIEN+8,TF_DEVICE_CONTROL
-   bsr      waitnotbusy1
+   WAITNOTBSY D0,D7
    beq      pretec
    WATABYTE #ATA_PACKET,TF_COMMAND     ;send packet command
    DLY400NS
-   bsr      waitdrq1
+   WAITDRQ  D0,D7
    beq      pretec
    RATABYTE TF_STATUS,d0
    and.b    #ERR,d0
@@ -938,15 +934,15 @@ pa9a
    bra      pa3
 ;
 pa10
-   bsr      waitnotbusy1
+   WAITNOTBSY D1,D7
    beq      pretec
    RATABYTE TF_STATUS,d1
    move.b   d1,act_Status
    and.b    #ERR,d1                    ;test, if error occured
    bne      pa_err
 pa11
-;  bsr      waitnotbusy1
-   movem.l  (sp)+,a0-a4/d0-d6
+;   WAITNOTBSY d0,d1
+   movem.l  (sp)+,a0-a4/d0-d7
    rts                                 ;return from Packet
 
 pretec                                 ;if timeout, return status=FFh
@@ -959,98 +955,6 @@ pa_err                                 ;if error, return actual status
 pa_zero                                ;if zero length occured, return AAh
    move.b   #$AA,act_Status
    bra      pa11
-
-
-waitdrq1
-   movem.l  d0/d1,-(sp)
-   move.l   #LOOP,d1
-   cmp.w    #TRUE,mdu_motor(a3)
-   beq      wd
-   move.l   #LOOP2,d1
-wd DLY3US
-   subq.l   #1,d1
-   beq      wd1
-   RATABYTE TF_ALTERNATE_STATUS,d0
-   and.b    #BSY+DRQ,d0
-   cmp.b    #DRQ,d0
-   bne      wd
-wd1
-   tst.l    d1
-   movem.l  (sp)+,d0/d1
-   rts
-
-
-waitdrdy1
-   movem.l  d0/d1,-(sp)
-   move.l   #LOOP,d1
-   cmp.w    #TRUE,mdu_motor(a3)
-   beq      dr
-   move.l   #LOOP2,d1
-dr DLY3US
-   subq.l   #1,d1
-   beq      dr1
-   RATABYTE TF_ALTERNATE_STATUS,d0
-   and.b    #BSY+DRDY,d0
-   cmp.b    #DRDY,d0
-   bne      dr
-dr1
-   tst.l    d1
-   movem.l  (sp)+,d0/d1
-   rts
-
-   PUBLIC waitnotbusy1
-waitnotbusy1
-   movem.l  d0/d1,-(sp)
-   move.l   #LOOP,d1
-   cmp.w    #TRUE,mdu_motor(a3)
-   beq      wn
-   move.l   #LOOP2,d1
-wn DLY3US
-   subq.l   #1,d1
-   beq      wn1
-   RATABYTE TF_ALTERNATE_STATUS,d0
-   and.b    #BSY,d0
-   bne      wn
-wn1
-   tst.l    d1
-   movem.l  (sp)+,d0/d1
-   rts
-
-   PUBLIC waitnotdrq1
-waitnotdrq1
-   movem.l  d0/d1,-(sp)
-   move.l   #LOOP,d1
-   cmp.w    #TRUE,mdu_motor(a3)
-   beq      wq
-   move.l   #LOOP2,d1
-wq DLY3US
-   subq.l   #1,d1
-   beq      wq1
-   RATABYTE TF_ALTERNATE_STATUS,d0
-   and.b    #DRQ,d0
-   bne      wq
-wq1
-   tst.l    d1
-   movem.l  (sp)+,d0/d1
-   rts
-
-waitbusy1
-   movem.l  d0/d1,-(sp)
-   move.l   #LOOP,d1
-   cmp.w    #TRUE,mdu_motor(a3)
-   beq      wb
-   move.l   #LOOP2,d1
-wb DLY3US
-   subq.l   #1,d1
-   beq      wb1
-   RATABYTE TF_ALTERNATE_STATUS,d0
-   and.b    #BSY,d0
-   beq      wb
-wb1
-   tst.l    d1
-   movem.l  (sp)+,d0/d1
-   rts
-
 
    PUBLIC   pause
 pause

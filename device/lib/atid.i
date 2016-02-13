@@ -40,41 +40,70 @@ WATAWORD macro
    move.w \1,\2
  endm
 
+LOOPPAUSE  equ   512      ; value for pause loop
+LOOP  equ   256000      ; timeout value for ATA - motor is on
+LOOP2 equ   2560000     ; timeout value for ATA - motor is off
+LOOP3 equ   256000       ; timeout value for ATAPI
+
 WAITNOTDRQ macro
-   move.l   #LOOP,/1
+   move.l   #LOOP,\2
 wqd\@ DLY3US
-   subq.l   #1,/2
+   subq.l   #1,\2
    beq      wqd1\@
-   RATABYTE TF_ALTERNATE_STATUS,/1
-   and.b    #DRQ,d0
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #DRQ,\1
    bne      wqd\@
 wqd1\@
-   tst.l    /2
+   tst.l    \2
  endm
 
+WAITNOTBSY macro
+   move.l   #LOOP,\2
+wn\@ DLY3US
+   subq.l   #1,\2
+   beq      wn1\@
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #BSY,\1
+   bne      wn\@
+wn1\@
+   tst.l    \2
+ endm
+
+WAITDRQ macro
+   move.l   #LOOP,\2
+wd\@ DLY3US
+   subq.l   #1,\2
+   beq      wd1\@
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #BSY+DRQ,\1
+   cmp.b    #DRQ,\1
+   bne      wd\@
+wd1\@
+   tst.l    \2
+ endm
 
 ;read macros
 RATADATAA5_D0_BYTES_64 macro
    move.l   #TF_DATA,a0
    ;d0 must be < $0002000
-   lsr.l    #6,d0;bytes to long and loop unrolling: 8 times
+   lsr.l    #2,d0;bytes to long and loop unrolling: 8 times
    sub.l    #1,d0;for dbra
 gre2\@
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
+   ;move.l   (a0),(a5)+
    move.l   (a0),(a5)+
    dbra     d0,gre2\@
   endm
@@ -92,24 +121,24 @@ gre\@
 ;write macros
 WATADATAA5_D0_BYTES_64 macro
    move.l   #TF_DATA,a0
-   lsr.l    #6,d0;bytes to long and loop unrolling: 8 times
+   lsr.l    #2,d0;bytes to long and loop unrolling: 8 times
    sub.l    #1,d0
 cva2\@
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
+   ;move.l   (a5)+,(a0)
    move.l   (a5)+,(a0)
    dbra     d0,cva2\@
  endm

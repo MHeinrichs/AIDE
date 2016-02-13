@@ -36,7 +36,6 @@
    XREF  ATARdWt       ;Read/Write routine
    XREF  InitDrive     ;Drive initialisation routine
    XREF  SCSIDirectCmd ;SCSI direct command routine
-   XREF  waitnotbusy1  ;ATA stuff.. routine
    XREF  SelectDrive   ;Selects which drive to use (0/1)
    XREF  blink         ;Routine that blinks the power LED
    XREF  pause         ;Pause routine
@@ -611,13 +610,12 @@ MyCMD:
    cmp.l    #1,IO_ACTUAL(a1)           ;if io_actual==1 -> motor control
    bne      MyError
 MyMotor:                               ;park drive heads and stop motor
-   move.l   d0,-(sp)
-   
+   movem.l  d0-d2,-(sp)  
    move.w   mdu_motor(a3),d0
    move.l   d0,IO_ACTUAL(a1)			;copy a long to IO_ACTUAL(a1)
    tst.l    IO_LENGTH(a1)
    bne      mtr1
-   bsr      waitnotbusy1
+   WAITNOTBSY d1,d2
    beq      mtr1
    move.l   mdu_UnitNum(a3),d0
    lsl.b    #4,d0
@@ -625,16 +623,16 @@ MyMotor:                               ;park drive heads and stop motor
    WATABYTE d0,TF_DRIVE_HEAD
    DLY5US
    WATABYTE #ATA_RECALIBRATE,TF_COMMAND
-   bsr      waitnotbusy1
+   WAITNOTBSY d1,d2
    beq      mtr1
    WATABYTE d0,TF_DRIVE_HEAD
    DLY5US
    WATABYTE #ATA_STANDBY_IMMEDIATE,TF_COMMAND
-   bsr      waitnotbusy1
+   WAITNOTBSY d1,d2
    RATABYTE TF_STATUS,d0
    move.w   #FALSE,mdu_motor(a3)
 mtr1
-   move.l   (sp)+,d0
+   movem.l  (sp)+,d0-d2  
    bsr      TermIO
    rts
 MyError:
