@@ -20,7 +20,13 @@ WRITEOPE equ $babecafe
 
 TRUE  equ   1
 FALSE equ   0
+LOOP  equ   120000      ; timeout value for ATA - motor is on
+LOOP2 equ   2500000     ; timeout value for ATA - motor is off
+LOOP3 equ   100000       ; timeout value for ATAPI
 
+   cnop  0,4
+
+buffer         dc.l  0        ;buffer pointer for ATA/ATAPI IDENTIFY DRIVE
 
    xref  _LVOAllocSignal      ;external references
    xref  _LVOSignal           ;these will be linked from amiga.lib
@@ -61,28 +67,32 @@ NOREADWRITE equ "PILU"
 ;That might happen in dev.asm.
 ;Both drives on the ide-cable are initialised by separate calls to this
 ;routine.
-   cnop  0,4
 
    PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
-   movem.l  d1/d2/d3/a0/a1/a5,-(sp)	 
-;get memory
-   move.l   #512,d0       ; we want 512 bytes for a buffer   
-   move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
-   LINKSYS  AllocMem,md_SysLib(a6)   
+   movem.l  d1/d2/a0/a1/a5,-(sp)
+   move.l   #512,d0       ; we want 512 bytes for a buffer
+   
+   move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared
+   
+   LINKSYS  AllocMem,md_SysLib(a6)
+   
    tst.l    d0             ; memory ok?
+   
    beq      wfc1
+   
    move.l   d0,buffer      ;save pointer
+   
    RATABYTE TF_STATUS,d0   ;clear drive interrupt line
+   move.w   #FALSE,mdu_firstcall(a3)
    cmp.w    #TRUE,mdu_auto(a3)
    bne      notauto
 
 ;get drive parameters
    move.w   #CHS_ACCESS,mdu_lba(a3)               ;presumption
-   bsr      SelectDrive	
-	 beq			wfc1														 ;no drive present!
+   bsr      SelectDrive
    WATABYTE #ATA_IDENTIFY_DRIVE,TF_COMMAND   ;get drive data
-   WAITNOTBSY D1,D2
+   bsr      waitnotbusy1
    beq      wfc1
    RATABYTE TF_STATUS,d0
    ;some atapi drives do NOT aboard this command: just read the CYLH/L Values
@@ -123,7 +133,7 @@ atapi
    move.w   #ATAPI_DRV,mdu_drv_type(a3)
 wfc2
    WATABYTE #IDENTIFY_PACKET_DEVICE,TF_COMMAND  ;get atapi drive data
-   WAITDRQ  D1,D2
+   bsr      waitdrq1
    beq      wfc1
    RATABYTE TF_STATUS,d0               ;clear interrupt line
    move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
@@ -139,13 +149,11 @@ atadrv
 kr3
    move.l   buffer,a5                  ;get identify data
    move.l	#512,d0
-   RATADATAA5_D0_BYTES_LONG
-   move.l   buffer,a5                  
-
+   RATADATAA5_D0_BYTES_64
+   move.l   buffer,a5
    ;IF Y=0 SWAP BYTES IN WORD BECAUSE AMIGA DATA0..7 IS DRIVE DATA8.15
    IFEQ Y,0
       move.l   A5,A0       ;buffer start
-      movem.l  d1-d2,-(sp) ;d1-d2 to stack
       move.w   #256-1,d0   ;move.word because dbra uses 16bits of register
 lk    move.w   (a0),d1
       move.w   d1,d2
@@ -155,11 +163,10 @@ lk    move.w   (a0),d1
       or.w     d2,d1
       move.w   d1,(a0)+
       dbra     d0,lk
-      movem.l  (sp)+,d1-d2 ;restore d1-d2
    ENDC
 
-   move.l   buffer,a5   ;copy serial number to internal info buffer
-   add.l    #20,a5			
+   move.l   buffer,a5            ;copy serial number to internal info buffer
+   add.l    #20,a5
    lea      mdu_ser_num(a3),a0
    move.b   #10,d0				
 ckl1
@@ -194,17 +201,19 @@ noeritd     ; ATA disk /SATA disk
    move.w   1*2(a5),d0           ;Word 1 Number of logical cylinders
    move.l   d0,mdu_cylinders(a3) ;store to internal buffer
    move.w   6*2(a5),d0           ;Word 6 Default Translation sectors
-   ;and.l    #$ffff,d0
+   and.l    #$ffff,d0
    move.l   d0,mdu_sectors_per_track(a3)  ;store to internal buffer
    move.w   3*2(a5),d0           ;Word 3 Default Translation Mode number of heads
-   ;and.l    #$ffff,d0
+   and.l    #$ffff,d0
    move.l   d0,mdu_heads(a3)     ;store to internal buffer
    move.b	#1,mdu_SectorBuffer(a3)
+   bsr		blink
    move.w   47*2(A5),d0          ;WRITE/READ Multiple capabilities
    cmp.l	#1,d0				 ;multi sector supportet?
-   bra		multiple_sector_dis  ; not set
+   ble		multiple_sector_dis  ; not set
    move.b	d0,mdu_SectorBuffer(a3)
 multiple_sector_dis
+   bsr		blink
    move.w   49*2(A5),d0          ;Word 49 Capabilities
    and.w    #$200,d0             ;Bit 9 1=LBA Supported
    beq      nolba
@@ -214,21 +223,21 @@ multiple_sector_dis
    move.l   d0,mdu_numlba(a3)    ;store to internal buffer
    beq      nolba                ;propably no lba support if no lba sectors
    move.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
-   ;move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
-   ;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
-   ;bra		endauto				 ; saty at LBA28
-   ;move.l   100*2(a5),d0         ;3rd word LBA48
-   ;swap.l   d0
-   ;or.w     101*2(a5),d0		 ;4th word LBA48
-   ;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
-   ;move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
-   ;;now the lower 32 bits
-   ;move.l   102*2(a5),d0         ;1st word LBA48
-   ;swap.l   d0
-   ;or.w     103*2(a5),d0		 ;2nd word LBA48
-   ;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
-   ;move.l   d0,mdu_numlba(a3)    ;store to internal buffer
-   ;move.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
+   move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
+   and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
+   bra		endauto				 ; saty at LBA28
+   move.l   100*2(a5),d0         ;3rd word LBA48
+   swap.l   d0
+   or.w     101*2(a5),d0		 ;4th word LBA48
+   beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
+   move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
+   ;now the lower 32 bits
+   move.l   102*2(a5),d0         ;1st word LBA48
+   swap.l   d0
+   or.w     103*2(a5),d0		 ;2nd word LBA48
+   beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
+   move.l   d0,mdu_numlba(a3)    ;store to internal buffer
+   move.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
    bra      endauto
 nolba                            ;Then its CHS
    move.w   #CHS_ACCESS,mdu_lba(a3)   ;store to internal buffer
@@ -258,8 +267,6 @@ notauto
    beq      setupata
    bra		kr2
 setupata
-   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
-   bge			kr2
    move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
    WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
    move.l   mdu_heads(a3),d0           ;LBA support
@@ -273,7 +280,7 @@ pis1
    DLY400NS
    bsr      waitreadytoacceptnewcommand
    WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-   WAITNOTBSY d1,d2
+   bsr      waitnotbusy1
 kr2
    move.l   buffer,d1 ;is there a pointer in buffer?
    tst.l    d1
@@ -285,7 +292,7 @@ kr2
    
 kr21:
    move.l   #0,buffer
-   movem.l  (sp)+,d1/d2/d3/a0/a1/a5
+   movem.l  (sp)+,d1/d2/a0/a1/a5
    rts
 ;----
 
@@ -361,7 +368,7 @@ errcode
    WATABYTE #8+nIEN,TF_DEVICE_CONTROL
    bsr      pause
    bclr.b   #1,$bfe001        ;Amiga power led on
-   WAITNOTBSY D0,D1
+   bsr      waitnotbusy1
    move.l   #1,d0
    bra      okcode
 
@@ -454,12 +461,12 @@ readsectors ;d4 is the number of sectors to read (between 1 and 64)
 readnextblk
    DLY400NS                      ;wait for BSY go high (400 ns)
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
-   WAITNOTBSY D2,D3
+   bsr      waitnotbusy1
    beq      rsfl
-   WAITDRQ	D2,D3
+   bsr      waitdrq1
    beq      rsfl
    move.l	#512,d0
-   RATADATAA5_D0_BYTES_LONG
+   RATADATAA5_D0_BYTES_64
    DLY5US                        ;wait DRQ go 0
    dbne     d4,readnextblk
    bsr      checkforerrors
@@ -479,13 +486,12 @@ writesectors ;d4 is the number of sectors to write (between 1 and 64)
    bsr      issuewrite
    sub.l    #1,d4				 ;for dbne   
 writenextoneblockki
-   WAITDRQ	D2,D3
+   bsr      waitdrq1
    beq      wekfha
-   move.l   #512,d0
-   WATADATAA5_D0_BYTES_LONG
+   bsr      writedata
    DLY5US                        ;BSY will go high within 5 microseconds after filling buffer
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
-   WAITNOTBSY D2,D3
+   bsr      waitnotbusy1
    beq      wekfha
    bsr      checkforerrors
    cmp.l    #0,d0
@@ -497,7 +503,7 @@ wekfha
    rts                           ;some error in writing
 
 checkforerrors
-   WAITNOTBSY D2,D3
+   bsr      waitnotbusy1
    beq      cfe1
    RATABYTE TF_ALTERNATE_STATUS,d0
    and.l    #DWF+ERR,d0
@@ -507,29 +513,29 @@ cfe1
    rts
 
 waitreadytoacceptnewcommand
-   movem.l  d1-d2,-(sp)
+   move.l   d1,-(sp)
    move.l   #LOOP,d1
    cmp.w    #TRUE,mdu_motor(a3)
    beq      fovc
-   move.l   #LOOP2,d1
+   move.l   #LOOP2-1,d1
 fovc
    ;subq.l   #1,d1
    dbeq     d1,wre1
-   WAITNOTBSY D0,D2
+   bsr      waitnotbusy1
    beq      wre1
    RATABYTE TF_STATUS,d0
    and.b    #BSY+DRDY+DWF+ERR,d0
    cmp.b    #DRDY,d0
    bne      oiuy
    move.l   #0,d0
-   movem.l  (sp)+,d1-d2
+   move.l   (sp)+,d1
    rts
 oiuy
    DLY5US   ; make a processor speed independent minimum delay
    and.b    #DWF+ERR,d0
    beq      fovc
 wre1
-   movem.l  (sp)+,d1-d2
+   move.l   (sp)+,d1
    move.l   #-865,d0
    rts
 
@@ -570,34 +576,38 @@ doLBAread
    WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
    WATABYTE #ATA_READ_SECTORS,TF_COMMAND
    rts
-;issueLBA48read
-;   ;bsr blink
-;   ;bsr blink
-;   move.l   mdu_UnitNum(a3),d2
-;   lsl.b    #4,d2
-;   add.b    #L,d2
-;   sub.w	#$A0,d2                    ;read extended
-;   WATABYTE d2,TF_DRIVE_HEAD           ;L=lba  lba bits 24..27
-;   move.l	d4,d2
-;   lsr.l	#8,d2						   ;upper byte sector count
-;   WATABYTE d2,TF_SECTOR_COUNT
-;   move.l	d0,d2					   ;extract lbabits 24..31
-;   rol.l    #8,d2
-;   and.l    #$FF,d2
-;   WATABYTE d2,TF_SECTOR_NUMBER        ;lba bits 24..31
-;   WATABYTE #0,TF_CYLINDER_LOW         ;lba bits 32..39 nothing!
-;   WATABYTE #0,TF_CYLINDER_HIGH        ;lba bits 40..47 nothing!
-;   move.l	d4,d2
-;   and.l    #$FF,d2
-;   WATABYTE d2,TF_SECTOR_COUNT		   ;write low byte
-;   WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
-;   lsr.l    #8,d0
-;   WATABYTE d0,TF_CYLINDER_LOW         ;lba bits 8..15
-;   lsr.l    #8,d0
-;   WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
-;   WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND
-;   rts
+issueLBA48read
+   ;bsr blink
+   ;bsr blink
+   move.l   mdu_UnitNum(a3),d2
+   lsl.b    #4,d2
+   add.b    #L,d2
+   sub.w	#$A0,d2                    ;read extended
+   WATABYTE d2,TF_DRIVE_HEAD           ;L=lba  lba bits 24..27
+   move.l	d4,d2
+   lsr.l	#8,d2						   ;upper byte sector count
+   WATABYTE d2,TF_SECTOR_COUNT
+   move.l	d0,d2					   ;extract lbabits 24..31
+   rol.l    #8,d2
+   and.l    #$FF,d2
+   WATABYTE d2,TF_SECTOR_NUMBER        ;lba bits 24..31
+   WATABYTE #0,TF_CYLINDER_LOW         ;lba bits 32..39 nothing!
+   WATABYTE #0,TF_CYLINDER_HIGH        ;lba bits 40..47 nothing!
+   move.l	d4,d2
+   and.l    #$FF,d2
+   WATABYTE d2,TF_SECTOR_COUNT		   ;write low byte
+   WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
+   lsr.l    #8,d0
+   WATABYTE d0,TF_CYLINDER_LOW         ;lba bits 8..15
+   lsr.l    #8,d0
+   WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
+   WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND
+   rts
 
+writedata
+   move.l   #512,d0
+   WATADATAA5_D0_BYTES_64
+   rts
 
 issuewrite
    cmp.w    #LBA28_ACCESS,mdu_lba(a3)
@@ -635,32 +645,32 @@ issueLBAwrite
    WATABYTE d0,TF_CYLINDER_HIGH        ;LBA  bits  16..23
    WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
    rts
-;issueLBA48write
-;   ;bsr blink
-;   move.l   mdu_UnitNum(a3),d2
-;   lsl.b    #4,d2
-;   add.b    #L,d2
-;   sub.w	#$A0,d2                    ;write extended
-;   WATABYTE d2,TF_DRIVE_HEAD           ;L=lba  lba bits 24..27
-;   move.l	d4,d2
-;   lsr.l	#8,d2						   ;upper byte sector count
-;   WATABYTE d2,TF_SECTOR_COUNT
-;   move.l	d0,d2					   ;extract lbabits 24..31
-;   rol.l    #8,d2
-;   and.l    #$FF,d2
-;   WATABYTE d2,TF_SECTOR_NUMBER        ;lba bits 24..31
-;   WATABYTE #0,TF_CYLINDER_LOW         ;lba bits 32..39 nothing!
-;   WATABYTE #0,TF_CYLINDER_HIGH        ;lba bits 40..47 nothing!
-;   move.l	d4,d2
-;   and.l    #$FF,d2
-;   WATABYTE d2,TF_SECTOR_COUNT		   ;write low byte
-;   WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
-;   lsr.l    #8,d0
-;   WATABYTE d0,TF_CYLINDER_LOW         ;lba bits 8..15
-;   lsr.l    #8,d0
-;   WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
-;   WATABYTE #ATA_WRITE_SECTORS_EXT,TF_COMMAND
-;   rts
+issueLBA48write
+   ;bsr blink
+   move.l   mdu_UnitNum(a3),d2
+   lsl.b    #4,d2
+   add.b    #L,d2
+   sub.w	#$A0,d2                    ;write extended
+   WATABYTE d2,TF_DRIVE_HEAD           ;L=lba  lba bits 24..27
+   move.l	d4,d2
+   lsr.l	#8,d2						   ;upper byte sector count
+   WATABYTE d2,TF_SECTOR_COUNT
+   move.l	d0,d2					   ;extract lbabits 24..31
+   rol.l    #8,d2
+   and.l    #$FF,d2
+   WATABYTE d2,TF_SECTOR_NUMBER        ;lba bits 24..31
+   WATABYTE #0,TF_CYLINDER_LOW         ;lba bits 32..39 nothing!
+   WATABYTE #0,TF_CYLINDER_HIGH        ;lba bits 40..47 nothing!
+   move.l	d4,d2
+   and.l    #$FF,d2
+   WATABYTE d2,TF_SECTOR_COUNT		   ;write low byte
+   WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
+   lsr.l    #8,d0
+   WATABYTE d0,TF_CYLINDER_LOW         ;lba bits 8..15
+   lsr.l    #8,d0
+   WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
+   WATABYTE #ATA_WRITE_SECTORS_EXT,TF_COMMAND
+   rts
 
 getCHS      ;convert block number to Cylinder / Head / Sector numbers
    move.l   d0,d3             ;d0 = number of block (block numbers begin from 0)
@@ -683,25 +693,6 @@ getCHS      ;convert block number to Cylinder / Head / Sector numbers
    and.l    #$ff,d1           ;cylinder high
    rts
 
-;SoftwareReset IDE-BUS
-ResetIDE
-	movem.l  d0,-(sp)
-	WATABYTE TF_DEVICE_CONTROL,nIEN+SRST ;assert reset and INTERRUPT
-	moveq.l	 #16,d0 ;wait 
-rstwait1:
-	DLY5US
-	dbne		d0,rstwait1
-	;release reset
-	WATABYTE TF_DEVICE_CONTROL,nIEN ;assert reset and INTERRUPT
-	moveq.l	 #120,d0 ;wait 200ms
-rstwait2:
-	tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
-	dbne		d0,rstwait2
-	movem.l  (sp)+,d0
-  rts
-	
-
-
 ;perform safe switch to act_drv drive
    PUBLIC   SelectDrive
 SelectDrive:
@@ -710,77 +701,57 @@ SelectDrive:
    cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
    beq      sdr3              ; just return from subroutine
    
-   ;WAITNOTBSY d0,d1
-   ;beq      sdr1
-   ;WAITNOTDRQ d0,d1
-   ;beq      sdr1
-   move.l   d0,act_Drive       ; store new drive id
-   ;moveq    #0,d0
-   ;RATABYTE TF_DRIVE_HEAD,d0
-   ;and.b    #$10,d0
-   ;lsr.b    #4,d0
-   ;cmp.w    #TRUE,mdu_firstcall(a3) ;select drive on first call for safety
-   ;beq		sdr5
-   ;cmp.l    mdu_UnitNum(a3),d0
-   ;beq      sdr3
-sdr5
+   bsr      waitnotbusy1
+   beq      sdr1
+   bsr      waitnotdrq1
+   beq      sdr1
+   moveq    #0,d0
+   RATABYTE TF_DRIVE_HEAD,d0
+   and.b    #$10,d0
+   lsr.b    #4,d0
+   cmp.l    mdu_UnitNum(a3),d0
+   beq      sdr3
    move.l   mdu_UnitNum(a3),d0
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
-   DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
-;   RATABYTE	TF_STATUS,d1
-;   RATABYTE	TF_STATUS,d1
-;   RATABYTE	TF_STATUS,d1
-;   RATABYTE	TF_STATUS,d1
-;   RATABYTE	TF_STATUS,d1
-
-;  cmp.l    #ATAPI_DRV,mdu_drv_type(a3)
-;  beq sdr4a
-;  cmp.l    #SATAPI_DRV,mdu_drv_type(a3)
-;  beq sdr4a
-;  cmp.l    #ATAPI_DRV,act_drv_type
-;  beq      sdr4a
-;  cmp.l    #SATAPI_DRV,act_drv_type
-;  beq      sdr4a
-;  bra      sdr2
-;sdr4a:
-;   move.l   #LOOP,d0
-;   cmp.w    #TRUE,mdu_motor(a3)
-;   beq      sdr4
-;   move.l   #LOOP2,d0
-;sdr4
-;   subq.l   #1,d0
-;   beq      sdr1
-;   move.b   TF_STATUS,d1
-;   and.b    #BSY+DRDY+SKC,d1
-;   cmp.b    #DRDY+SKC,d1
-;   beq      sdr3
-;   DLY5US
-;   bra      sdr4
+   DLY400NS
+   move.l   d0,act_Drive       ; store new drive id
+;  cmp.l    #ATA_DRV,act_drv_type
+;  bne      sdr2
+   bra      sdr2
+   move.l   #LOOP,d0
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      sdr4
+   move.l   #LOOP2,d0
+sdr4
+   subq.l   #1,d0
+   beq      sdr1
+   move.b   TF_STATUS,d1
+   and.b    #BSY+DRDY+SKC,d1
+   cmp.b    #DRDY+SKC,d1
+   beq      sdr3
+   DLY5US
+   bra      sdr4
 sdr2
-   ;WAITNOTBSY d0,d1
-   ;beq      sdr1
-   ;WAITNOTDRQ d0,d1
-   ;beq      sdr1
+   bsr      waitnotbusy1
+   beq      sdr1
+   bsr      waitnotdrq1
+   beq      sdr1
 sdr3
-  RATABYTE	TF_STATUS,d1				, clear interrupt liner
-  moveq.l  #1,d0                ; clear zero flag
+   moveq.l  #1,d0                ; clear zero flag
 sdr1
    movem.l  (sp)+,d0/d1
    rts
 
-   cnop  0,4
-buffer      dc.l  0        ;buffer pointer for ATA/ATAPI IDENTIFY DRIVE
 act_Drive   dc.l  $FFFFFFFF      ; actual selected drive
-act_Actual  dc.l  0
 rs_cmd      dc.w  $0300,0,$2000,0,0,0
-act_cmd     ds.w  8
 act_Status  dc.b  0
 act_Flags   dc.b  0
+act_Actual  dc.l  0
 sense_data  ds.b  20             ; sense data of last packet command
-   cnop  0,4
-   
+
+
 ; a0 = scsi_Data, d0 = scsi_Length, a1(not a2?;ml) = scsi_Command, a6 = SCSICmd
 ; d2 = unit number, a3 = io_unit
 
@@ -813,7 +784,7 @@ sdc5
    bne      sdc1
    WATABYTE #$08,TF_COMMAND         ;then reset atapi device
    DLY400NS
-   WAITNOTBSY d1,d2
+   bsr      waitnotbusy1
    bra      sdc2
 sdc1                                ;read sense data if error
    lea      sense_data,a5
@@ -855,6 +826,9 @@ sdc2
    movem.l  (sp)+,a0-a6/d0-d6
    rts
 
+
+act_cmd     ds.w  8
+
 ; a0 = scsi_Data, a2 = scsi_Command, a3 = io_unit, a6 = SCSICmd
 ; d1 = scsi_Length, d2 = unit number, d3 = cmd_length
 
@@ -863,9 +837,9 @@ Packet
    movem.l  a0-a4/d0-d6,-(sp)
    clr.l    act_Actual
    DLY400NS
-   WAITNOTBSY D0,D6               ;wait till drive is not ready
+   bsr      waitnotbusy1               ;wait till drive is not ready
    beq      pretec
-   WAITNOTDRQ D0,D6
+   bsr      waitnotdrq1
    beq      pretec
    lsl.b    #4,d2
    or.b     #$a0,d2
@@ -876,11 +850,11 @@ Packet
    lsr.w    #8,d1
    WATABYTE d1,TF_CYLINDER_HIGH
    WATABYTE #nIEN+8,TF_DEVICE_CONTROL
-   WAITNOTBSY D0,D6
+   bsr      waitnotbusy1
    beq      pretec
    WATABYTE #ATA_PACKET,TF_COMMAND     ;send packet command
    DLY400NS
-   WAITDRQ  D0,D6
+   bsr      waitdrq1
    beq      pretec
    RATABYTE TF_STATUS,d0
    and.b    #ERR,d0
@@ -947,43 +921,38 @@ pa7
    bne      pa_err
    btst.b   #SCSIB_READ_WRITE,act_Flags   ;read or write required?
    beq      pa9
-pa8              
-   ; read data from drive
+pa8                                    ; read data from drive
    move.l   d3,d0
-   btst     #1,d0											; is the data long alligned?                      
-   ;and.l    #63,d0                     ; is the data 64byte alligned?
+   and.l    #63,d0                     ; is the data 64byte alligned?
    beq      pa8a
-   ;move.l   d3,d0                      ; restore d0
+   move.l   d3,d0                      ; restore d0
    RATADATAA5_D0_BYTES
    bra      pa3
 pa8a 
-   ;move.l   d3,d0                      ; restore d0
-   RATADATAA5_D0_BYTES_LONG
-   ;RATADATAA5_D0_BYTES_64
+   move.l   d3,d0                      ; restore d0
+   RATADATAA5_D0_BYTES_64
    bra      pa3
 pa9                                    ; write data to drive
    move.l   d3,d0
-   btst     #1,d0											; is the data long alligned?                      
-   ;and.l    #63,d0                     ; is the data 64byte alligned?
+   and.l    #63,d0                     ; is the data 64byte alligned?
    beq         pa9a
-   ;move.l   d3,d0                      ; restore d0
+   move.l   d3,d0                      ; restore d0
    WATADATAA5_D0_BYTES
    bra      pa3
 pa9a
-   ;move.l   d3,d0                      ; restore d0
-   WATADATAA5_D0_BYTES_LONG
-   ;WATADATAA5_D0_BYTES_64
+   move.l   d3,d0                      ; restore d0
+   WATADATAA5_D0_BYTES_64
    bra      pa3
 ;
 pa10
-   WAITNOTBSY D1,D6
+   bsr      waitnotbusy1
    beq      pretec
    RATABYTE TF_STATUS,d1
    move.b   d1,act_Status
    and.b    #ERR,d1                    ;test, if error occured
    bne      pa_err
 pa11
-;   WAITNOTBSY d0,d6
+;  bsr      waitnotbusy1
    movem.l  (sp)+,a0-a4/d0-d6
    rts                                 ;return from Packet
 
@@ -998,10 +967,101 @@ pa_zero                                ;if zero length occured, return AAh
    move.b   #$AA,act_Status
    bra      pa11
 
+
+waitdrq1
+   movem.l  d0/d1,-(sp)
+   move.l   #LOOP,d1
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      wd
+   move.l   #LOOP2,d1
+wd DLY3US
+   subq.l   #1,d1
+   beq      wd1
+   RATABYTE TF_ALTERNATE_STATUS,d0
+   and.b    #BSY+DRQ,d0
+   cmp.b    #DRQ,d0
+   bne      wd
+wd1
+   tst.l    d1
+   movem.l  (sp)+,d0/d1
+   rts
+
+
+waitdrdy1
+   movem.l  d0/d1,-(sp)
+   move.l   #LOOP,d1
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      dr
+   move.l   #LOOP2,d1
+dr DLY3US
+   subq.l   #1,d1
+   beq      dr1
+   RATABYTE TF_ALTERNATE_STATUS,d0
+   and.b    #BSY+DRDY,d0
+   cmp.b    #DRDY,d0
+   bne      dr
+dr1
+   tst.l    d1
+   movem.l  (sp)+,d0/d1
+   rts
+
+   PUBLIC waitnotbusy1
+waitnotbusy1
+   movem.l  d0/d1,-(sp)
+   move.l   #LOOP,d1
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      wn
+   move.l   #LOOP2,d1
+wn DLY3US
+   subq.l   #1,d1
+   beq      wn1
+   RATABYTE TF_ALTERNATE_STATUS,d0
+   and.b    #BSY,d0
+   bne      wn
+wn1
+   tst.l    d1
+   movem.l  (sp)+,d0/d1
+   rts
+
+   PUBLIC waitnotdrq1
+waitnotdrq1
+   movem.l  d0/d1,-(sp)
+   move.l   #LOOP,d1
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      wq
+   move.l   #LOOP2,d1
+wq DLY3US
+   subq.l   #1,d1
+   beq      wq1
+   RATABYTE TF_ALTERNATE_STATUS,d0
+   and.b    #DRQ,d0
+   bne      wq
+wq1
+   tst.l    d1
+   movem.l  (sp)+,d0/d1
+   rts
+
+waitbusy1
+   movem.l  d0/d1,-(sp)
+   move.l   #LOOP,d1
+   cmp.w    #TRUE,mdu_motor(a3)
+   beq      wb
+   move.l   #LOOP2,d1
+wb DLY3US
+   subq.l   #1,d1
+   beq      wb1
+   RATABYTE TF_ALTERNATE_STATUS,d0
+   and.b    #BSY,d0
+   beq      wb
+wb1
+   tst.l    d1
+   movem.l  (sp)+,d0/d1
+   rts
+
    PUBLIC   pause
 pause
    move.l   d0,-(sp)
-   move.l   #LOOPPAUSE,d0
+   move.l   #500,d0
 pu1
    DLY5US
    dbra     d0,pu1

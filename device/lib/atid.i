@@ -83,27 +83,38 @@ wd1\@
  endm
 
 ;read macros
-RATADATAA5_D0_BYTES_64 macro
+RATADATAA5_D0_BYTES_LONG macro
    move.l   #TF_DATA,a0
    ;d0 must be < $0002000
    lsr.l    #2,d0;bytes to long and loop unrolling: 8 times
    sub.l    #1,d0;for dbra
 gre2\@
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
-   ;move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   dbra     d0,gre2\@
+  endm
+
+;read macros
+RATADATAA5_D0_BYTES_64 macro
+   move.l   #TF_DATA,a0
+   ;d0 must be < $0002000
+   lsr.l    #8,d0;bytes to long and loop unrolling: 8 times
+   sub.l    #1,d0;for dbra
+gre2\@
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
    move.l   (a0),(a5)+
    dbra     d0,gre2\@
   endm
@@ -119,26 +130,36 @@ gre\@
   endm
 
 ;write macros
-WATADATAA5_D0_BYTES_64 macro
+WATADATAA5_D0_BYTES_LONG macro
    move.l   #TF_DATA,a0
    lsr.l    #2,d0;bytes to long and loop unrolling: 8 times
    sub.l    #1,d0
 cva2\@
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
-   ;move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   dbra     d0,cva2\@
+ endm
+
+;write macros
+WATADATAA5_D0_BYTES_64 macro
+   move.l   #TF_DATA,a0
+   lsr.l    #8,d0;bytes to long and loop unrolling: 8 times
+   sub.l    #1,d0
+cva2\@
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
    move.l   (a5)+,(a0)
    dbra     d0,cva2\@
  endm
@@ -165,14 +186,16 @@ DLY5US macro ;wait at least 5 microseconds
 
    tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
    tst.b    $bfe301
-   tst.b    $bfe301
-   tst.b    $bfe301
+   ;tst.b    $bfe301
+   ;tst.b    $bfe301
 
   endm
 
 
 DLY3US macro ;wait approx 3 microseconds
 
+;   tst.b    $000004 ;one chipram-cycle at least 560ns!
+;   tst.b    $000004
 ;   tst.b    $000004
 ;   tst.b    $000004
 

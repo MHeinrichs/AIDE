@@ -1,4 +1,4 @@
-;Latest modification 24th of February 2016
+;Latest modification November 2013
    SECTION   section
    include "exec/types.i"
    include "exec/nodes.i"
@@ -36,6 +36,7 @@
    XREF  ATARdWt       ;Read/Write routine
    XREF  InitDrive     ;Drive initialisation routine
    XREF  SCSIDirectCmd ;SCSI direct command routine
+   XREF  waitnotbusy1  ;ATA stuff.. routine
    XREF  SelectDrive   ;Selects which drive to use (0/1)
    XREF  blink         ;Routine that blinks the power LED
    XREF  pause         ;Pause routine
@@ -201,26 +202,45 @@ init_end:
 
 
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
+
    movem.l  d2/a2-a4,-(sp)
+
    move.l   a1,a2                   ; save the iob
+
+
+
    ;------ see if the unit number is in range
+
    cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
    bne      opn1
+
    move.l   #1,d0
 opn1
    move.l   d0,d2
+
    and.l    #$FFFFFFFE,d2           ;Allow unit numbers 0 and 1.
+
    bne      Open_Error              ;unit number is out of range
    ;------ see if the unit is already initialized
+
    move.l   d0,d2                   ; save unit number
+
    lsl.l    #2,d0
+
    lea.l    md_Units(a6,d0.l),a4
+
    move.l   (a4),d0
+
    bne.s    Open_UnitOK
+
    ;------ Try and conjure up a unit
+
    bsr      InitUnit
+
    ;------ see if it initialized OK
+
    move.l   (a4),d0
+
    beq.s    Open_Error
 
 Open_UnitOK:
@@ -228,22 +248,30 @@ Open_UnitOK:
    move.l   d0,IO_UNIT(a2)
 
    ;------ mark us as having another opener
+
    addq.w   #1,LIB_OPENCNT(a6)
+
    addq.w   #1,UNIT_OPENCNT(a3)
    ;------ prevent delayed expunges
+
    bclr     #LIBB_DELEXP,md_Flags(a6)
+
+
+
    ;If the IDE drive has not been initialised previously, do it now
    cmp.w    #TRUE,mdu_firstcall(a3)
    bne      nav1
    bsr      InitDrive ;Call the IDE drive initialisation routine
-   move.w   #FALSE,mdu_firstcall(a3)
 nav1
+   move.w   #FALSE,mdu_firstcall(a3)
    cmp.w    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type
    beq      Open_Error                     ; unknowns cannot be opened!
    moveq    #0,d0
 
 Open_End
+
    movem.l  (sp)+,d2/a2-a4
+
    rts
 Open_Error:
    bsr      FreeUnit
@@ -352,7 +380,8 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    ;------ allocate unit memory
    move.l   #MyDevUnit_Sizeof,d0
-   move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+   move.l   #MEMF_ANY!MEMF_CLEAR,d1
+
    LINKSYS  AllocMem,md_SysLib(a6)
 
    move.l   d0,a3
@@ -610,12 +639,13 @@ MyCMD:
    cmp.l    #1,IO_ACTUAL(a1)           ;if io_actual==1 -> motor control
    bne      MyError
 MyMotor:                               ;park drive heads and stop motor
-   movem.l  d0-d2,-(sp)  
+   move.l   d0,-(sp)
+   
    move.w   mdu_motor(a3),d0
    move.l   d0,IO_ACTUAL(a1)			;copy a long to IO_ACTUAL(a1)
    tst.l    IO_LENGTH(a1)
    bne      mtr1
-   WAITNOTBSY d1,d2
+   bsr      waitnotbusy1
    beq      mtr1
    move.l   mdu_UnitNum(a3),d0
    lsl.b    #4,d0
@@ -623,16 +653,16 @@ MyMotor:                               ;park drive heads and stop motor
    WATABYTE d0,TF_DRIVE_HEAD
    DLY5US
    WATABYTE #ATA_RECALIBRATE,TF_COMMAND
-   WAITNOTBSY d1,d2
+   bsr      waitnotbusy1
    beq      mtr1
    WATABYTE d0,TF_DRIVE_HEAD
    DLY5US
    WATABYTE #ATA_STANDBY_IMMEDIATE,TF_COMMAND
-   WAITNOTBSY d1,d2
+   bsr      waitnotbusy1
    RATABYTE TF_STATUS,d0
    move.w   #FALSE,mdu_motor(a3)
 mtr1
-   movem.l  (sp)+,d0-d2  
+   move.l   (sp)+,d0
    bsr      TermIO
    rts
 MyError:
@@ -775,16 +805,15 @@ escsi13
    bra      escsi4
 scsi_cap                               ; Read Recorded Capacity packet
    cmp.w    #CHS_ACCESS,mdu_lba(a3)
-   beq 		chscapa
+   bra 		chscapa
    move.l   mdu_numlba(a3),d0
-;   subq.l		#1,d0												; one less to avoid offset problems!
-;   cmp.w    #LBA28_ACCESS,mdu_lba(a3)
-;   beq 		setcapa
-;   move.l   mdu_numlba48(a3),d1
-;   bra		setcapa ;less than 8 gig->lba28?
-;   and.l	#$0F,d1 ;just take the lower 4 bit! -> should read lba32 ;)
-;   ror.l	#4,d1
-;   or.l     d1,d0
+   cmp.w    #LBA28_ACCESS,mdu_lba(a3)
+   beq 		setcapa
+   move.l   mdu_numlba48(a3),d1
+   bra		setcapa ;less than 8 gig->lba28?
+   and.l	#$0F,d1 ;just take the lower 4 bit! -> should read lba32 ;)
+   ror.l	#4,d1
+   or.l     d1,d0
    bra		setcapa   
 chscapa
    move.l   mdu_heads(a3),d0
@@ -808,7 +837,9 @@ scsi_inq                               ; Inquiry packet
    move.l   (a2),(a0)+
 
    lea      mdu_ser_num(a3),a2
-   lea      EmulInquiry+16,a0
+
+   ;lea      EmulInquiry+16,a0
+
    move.l   (a2)+,(a0)+
    move.l   (a2)+,(a0)+
    move.l   (a2)+,(a0)+
