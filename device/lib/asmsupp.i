@@ -48,3 +48,6 @@ XLIB	MACRO		; define a library reference without the _LVO
 	XREF	_LVO\1
 	ENDM
 
+
+ABSEXECBASE equ 4   ;Absolute location of the pointer to exec.library base
+_AbsExecBase equ 4   ;Absolute location of the pointer to exec.library base

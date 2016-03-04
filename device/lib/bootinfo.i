@@ -2,8 +2,8 @@ BLOCKSIZE   EQU   $FF
 
 
     STRUCTURE MyParmPkt,0
-   ULONG    pp_dosName
-   ULONG    pp_execName
+   APTR     pp_dosName
+   APTR     pp_execName
    ULONG    pp_unitNumber
    ULONG    pp_flags
    ULONG    pp_paramSize

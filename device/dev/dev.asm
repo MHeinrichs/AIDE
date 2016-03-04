@@ -30,6 +30,8 @@
                            ;hardware interface, such as an A500 
                            ;side slot interface or a Parallel port
                            ;interface.
+   include "/debug/debug-wrapper.i"
+
    ;Routines and other values to be linked from "rdwt.asm"
    XREF  READOPE       ;These two constants are codes for
    XREF  WRITEOPE      ;the types of operation for IDERdWt
@@ -77,10 +79,14 @@ _intena  equ   $dff09a ;;;ML
 TRUE  equ   1
 FALSE equ   0
 
+		IFND	DEBUG_DETAIL
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+		ENDC
+
 
 
 FirstAddress:
-   moveq  #0,d0 
+   moveq  #-1,d0 
    rts          ;Return in case this code was called as a program
 MYPRI   EQU   10
 ;ROM-Tag 
@@ -151,6 +157,8 @@ initRoutine:
 ; DO INITIALIZE THE INTERFACE NOW, macro from INTERFACEI: include file
    INITATAINTERFACE
 ;------------------
+   PRINTF 1,<'Init ide.device',13,10>
+ 
    ;------ save a pointer to exec
    move.l   a6,md_SysLib(a5)
    move.l   a5,devadr
@@ -158,27 +166,37 @@ initRoutine:
    ;------ save a pointer to our loaded code
    move.l   a0,md_SegList(a5)
 
-   lea.l    dosName,A1              ;Get dos lib. name
-   moveq    #0,D0
-   CALLSYS  OpenLibrary             ;Open the dos library
-   move.l   d0,md_DosLib(a5)
-   bne.s    init1
-   ALERT    AG_OpenLib!AO_DOSLib
-   bra      init_error
+   ;no doslib required anymore and this resulted 
+   ;in errors during coldstart, because there is no doslib at coldstart!
+
+   ;lea.l    dosName,A1              ;Get dos lib. name
+   ;PRINTF 1,<'opening %s',13,10>,A1
+   ;moveq    #0,D0
+   ;CALLSYS  OpenLibrary             ;Open the dos library
+   ;move.l   d0,md_DosLib(a5)
+   ;bne.s    init1
+   ;ALERT    AG_OpenLib!AO_DOSLib
+   ;bra      init_error
 init1
+   PRINTF 1,<'Trying to alloc signal for unit 0',13,10>
    ;------ Allocate the signal for unit 0
    moveq    #-1,d0
    CALLSYS  AllocSignal 
    move.l   d0,unit0sigbit
+   PRINTF 1,<'Alloc signal ide.device Unit 0: %lx',13,10>,d0
    moveq    #0,d1
    bset     d0,d1
    move.l   d1,unit0mask
+   PRINTF 1,<'Unitmask ide.device Unit 0: %lx',13,10>,d1
    ;------ Allocate the signal for unit 1
+   PRINTF 1,<'Trying to alloc signal for unit 1',13,10>
    moveq    #-1,d0
    CALLSYS  AllocSignal
    move.l   d0,unit1sigbit
+   PRINTF 1,<'Alloc signal ide.device Unit 1: %lx',13,10>,d0
    moveq    #0,d1
    bset     d0,d1
+   PRINTF 1,<'Unitmask ide.device Unit 1: %lx',13,10>,d1
    move.l   d1,unit1mask
    ;------ Initialize the stack information
    lea      md_stack(a5),a0         ;Low end of stack
@@ -190,12 +208,14 @@ init1
    lea      Proc_Begin(PC),a2
    lea      -1,a3             ;generate address error if task ever "returns".
    moveq    #0,d0
+   PRINTF 1,<'AddTask',13,10>
    CALLSYS  AddTask  ;A task for doing things...
    move.l   a5,d0
    bra      init_end
 init_error:
    moveq    #0,d0
 init_end:
+   PRINTF 1,<'End ide.device returns: %ld',13,10>,D0
    movem.l  (sp)+,d1/a0-a1/a3-a5
    rts
 
