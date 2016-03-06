@@ -209,10 +209,14 @@ device_present:
    beq     close_and_dealloc
    ;init the ConfigDev
    move.l  d0,a0
-   move.l	fakebootrom(pc),cd_Rom+er_Reserved0c(a0) ;save the diag entry
-   move.l  IDE_BASE_ADDRESS,cd_BoardAddr(a0) ;save the board adress
-   move.l  #ERTF_DIAGVALID,cd_Rom+er_Type(a0) ; this makes the thing autoboot
-   ;CALLSYS AddConfigDev ;add it to the system
+   lea.l   fakebootrom(pc),a1
+   move.l  a1,cd_Rom+er_Reserved0c(a0) ;save the diag entry
+   move.l  #IDE_BASE_ADDRESS,cd_BoardAddr(a0) ;save the board adress
+   move.l  $100,cd_BoardSize(a0) ;store the board size
+   move.b  #ERTF_DIAGVALID+ERT_ZORROII,cd_Rom+er_Type(a0) ; this makes the thing autoboot
+   move.w  #2588,cd_Rom+er_Manufacturer(a0) ;a1k org :D
+   move.b  #123,cd_Rom+er_Product(a0)
+   CALLSYS AddConfigDev ;add it to the system
 
 
    ; Create the DOS node.
@@ -261,7 +265,7 @@ device_present:
 
 
    ;set d0/d1: priority and startproc
-   move.l	  pp_bootPrio(a3),d0			this priority
+   move.l	  #20,d0			this priority
    moveq.l	#ADNF_STARTPROC,d1	StartProc = true
    ;put the DeviceNode from d2 in A0
    move.l   d2,a0 
@@ -316,20 +320,17 @@ bomb:
    movem.l (SP)+,d1-d4/a0-a6
    rts
 
-   CNOP	0,4
-
 devicebase: dc.l 0
 buffermem: dc.l 0
 parametermem: dc.l 0
 bootnodemem: dc.l 0
 configdev: dc.l 0
 expansionlib: dc.l 0
-
 iohandler: dc.l 0
 
    ; Fake ConfigDev and Diagnostic ROM structure.
 fakebootrom:
-   dc.b    DAC_CONFIGTIME
+   dc.b    DAC_WORDWIDE+DAC_CONFIGTIME
    dc.b    0
    dc.w    0
    dc.w    0
@@ -343,17 +344,20 @@ fakebootrom:
 bootcode:
    lea     dosname(pc),a1
    CALLSYS FindResident
+   tst.l	d0			;did we find it?
+   beq.s	BootedMe		;no
    move.l  d0,a0
    move.l  RT_INIT(a0),a0
    jsr     (a0)
+BootedMe:
    rts
    CNOP 0,4
 dosname:
    dc.b    'dos.library',0
-bootdevicename:
-   dc.b    'ide.device',0
 		CNOP	0,2
 endcopy:
+bootdevicename:
+   dc.b    'ide.device',0
 bootdosname:
    dc.b    'DH0',0
 expname:    dc.b    'expansion.library',0
