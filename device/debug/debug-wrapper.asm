@@ -1,4 +1,4 @@
-   SECTION   section
+   SECTION   driver,CODE
 
 	XDEF	kprint_macro
 	XREF	KPrintF

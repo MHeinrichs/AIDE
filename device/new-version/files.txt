@@ -1,0 +1,3 @@
+../dev/dev.o
+../rdwt/rdwt.o
+../debug/debug-wrapper.o

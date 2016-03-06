@@ -93,7 +93,7 @@ IDSTRINGMACRO macro
 VERSION equ 2
 REVISION equ 24
 
-DOSNAME      MACRO
-      DC.B   'dos.library',0
-      ENDM
+;DOSNAME      MACRO
+;      DC.B   'dos.library',0
+;      ENDM
 

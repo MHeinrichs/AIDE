@@ -209,7 +209,7 @@ multiple_sector_dis
    and.w    #$200,d0             ;Bit 9 1=LBA Supported
    beq      nolba
    move.w   61*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
-   swap.l   d0
+   swap   d0
    or.w     60*2(a5),d0
    move.l   d0,mdu_numlba(a3)    ;store to internal buffer
    beq      nolba                ;propably no lba support if no lba sectors
@@ -218,13 +218,13 @@ multiple_sector_dis
    ;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
    ;bra		endauto				 ; saty at LBA28
    ;move.l   100*2(a5),d0         ;3rd word LBA48
-   ;swap.l   d0
+   ;swap   d0
    ;or.w     101*2(a5),d0		 ;4th word LBA48
    ;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
    ;move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
    ;;now the lower 32 bits
    ;move.l   102*2(a5),d0         ;1st word LBA48
-   ;swap.l   d0
+   ;swap   d0
    ;or.w     103*2(a5),d0		 ;2nd word LBA48
    ;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
    ;move.l   d0,mdu_numlba(a3)    ;store to internal buffer
@@ -267,7 +267,7 @@ setupata
    or.b     #$a0,d0
    tst.l    mdu_UnitNum(a3)
    beq      pis1
-   bset.b   #4,d0
+   bset   #4,d0
 pis1
    WATABYTE d0,TF_DRIVE_HEAD
    DLY400NS
@@ -666,7 +666,7 @@ getCHS      ;convert block number to Cylinder / Head / Sector numbers
    move.l   d0,d3             ;d0 = number of block (block numbers begin from 0)
    move.l   mdu_sectors_per_track(a3),d2
    divu     d2,d3
-   swap.l   d3
+   swap     d3
    add.w    #1,d3             ;sector numbers begin at 1
    and.l    #$ff,d3           ;sector number byte
    move.l   mdu_sectors_per_track(a3),d2     ;d0 = number of block
@@ -675,7 +675,7 @@ getCHS      ;convert block number to Cylinder / Head / Sector numbers
    move.l   mdu_heads(a3),d2
    divu     d2,d0             ;d0 = cyl
    move.l   d0,d2
-   swap.l   d2
+   swap     d2
    and.l    #$f,d2            ;d2 = head
    move.l   d0,d1
    and.l    #$ff,d0           ;cylinder low
@@ -913,7 +913,7 @@ pa4
    bne      pa4
    RATABYTE TF_SECTOR_COUNT,d1
    and.b    #3,d1
-   btst.b   #3,d0
+   btst     #3,d0
    bne      pa5
    cmp.b    #3,d1
    beq      pa6

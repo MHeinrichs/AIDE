@@ -45,7 +45,7 @@ nIEN  equ   bit1 ;interrupt enable
 ;error register
 BBK   equ   bit7 ;bad block detected
 UNC   equ   bit6 ;uncorrectable data error
-MC    equ   bit5 ;media changed
+;MC    equ   bit5 ;media changed
 IDNF  equ   bit4 ;ID Not Found
 ABRT  equ   bit3 ;aborted command
 MCR   equ   bit2 ;Media Change Requested

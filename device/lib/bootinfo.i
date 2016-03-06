@@ -24,3 +24,7 @@ BLOCKSIZE   EQU   $FF
    LONG     pp_bootPrio
    ULONG    pp_dosType
    LABEL    MyParmPkt_Sizeof
+
+
+BD_VERSION equ 1
+BD_REVISION equ 0

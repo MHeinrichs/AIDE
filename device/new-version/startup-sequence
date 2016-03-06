@@ -1,5 +1,6 @@
 ; Comment this line for booting from IDE
 LoadModule DEVS:ide.device DEVS:bootide.device 
+;LoadModule DEVS:bootide.device 
 ;LoadModule DEVS:ide.device
 skip config-boot
 

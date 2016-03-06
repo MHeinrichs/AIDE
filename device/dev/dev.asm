@@ -1,5 +1,5 @@
 ;Latest modification 24th of February 2016
-   SECTION   section
+   SECTION    driver,CODE
    include "exec/types.i"
    include "exec/nodes.i"
    include "exec/lists.i"
@@ -17,11 +17,12 @@
    include "libraries/expansion.i"
    include "libraries/configvars.i"
    include "libraries/configregs.i"
+   include "libraries/expansionbase.i"
+   include "libraries/filehandler.i"
    ;Note that the next ASSIGNs ending with : need to be assigned
    ;outside of this assembly source file, eg. in compilation scripts.
    ;These are AmigaDos "links" to some certain file.
    include "/lib/asmsupp.i";Various helper macros made by Commodore
-   include "/lib/myscsi.i" ;
    include "/lib/ata.i"    ;ATA commands and other ATA codes
    include "/lib/mydev.i"  ;select name etc, of the device
    include "/lib/atid.i"   ;This include has the macros which
@@ -30,7 +31,9 @@
                            ;hardware interface, such as an A500 
                            ;side slot interface or a Parallel port
                            ;interface.
+   include "/lib/bootinfo.i"  ;select name etc, of the device
    include "/debug/debug-wrapper.i"
+   ;include "lib/myscsi.i" ;
 
    ;Routines and other values to be linked from "rdwt.asm"
    XREF  READOPE       ;These two constants are codes for
@@ -41,8 +44,6 @@
    XREF  SelectDrive   ;Selects which drive to use (0/1)
    XREF  blink         ;Routine that blinks the power LED
    XREF  pause         ;Pause routine
-
-
 
    XLIB  AddIntServer ;XLIB macro: XLIB Something => XREF _LVOSomething
    XLIB  RemIntServer 
@@ -72,6 +73,12 @@
    XLIB  Forbid
    XLIB  Delay
    XLIB  Alert
+   XLIB FindResident
+   XLIB InitResident
+   XLIB AllocConfigDev
+   XLIB AddConfigDev
+   XLIB AddBootNode
+
 ;The _intena address is the register which can be used to disable or 
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
 _intena  equ   $dff09a ;;;ML
@@ -80,7 +87,7 @@ TRUE  equ   1
 FALSE equ   0
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 
@@ -89,6 +96,7 @@ FirstAddress:
    moveq  #-1,d0 
    rts          ;Return in case this code was called as a program
 MYPRI   EQU   10
+
 ;ROM-Tag 
 initDDescrip:
                ;STRUCTURE RT,0
@@ -215,12 +223,12 @@ init1
 init_error:
    moveq    #0,d0
 init_end:
-   PRINTF 1,<'End ide.device returns: %ld',13,10>,D0
+   PRINTF 1,<'End ide.device returns: %lx',13,10>,D0
    movem.l  (sp)+,d1/a0-a1/a3-a5
    rts
 
-
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
+   PRINTF 1,<'Open ide.device %lx unit %lx flags %lx',13,10>a6,d0,d1
    movem.l  d2/a2-a4,-(sp)
    move.l   a1,a2                   ; save the iob
    ;------ see if the unit number is in range
@@ -263,6 +271,7 @@ nav1
    moveq    #0,d0
 
 Open_End
+   PRINTF 1,<'End ide.device %lx ',13,10>d0
    movem.l  (sp)+,d2/a2-a4
    rts
 Open_Error:
