@@ -126,7 +126,7 @@ initRoutine:
    bne device_present
    
    ;device not loaded: find the resident structure
-   lea	bootdevicename(PC),a1	; the device name to look for
+   lea	bootdevicename,a1	; the device name to look for
    CALLSYS FindResident   
 	 PRINTF 1,<'Find Resident resulted in %lx',13,10>,D0
    tst.l	d0   
@@ -143,64 +143,38 @@ initRoutine:
    
 device_present:
    move.l  d0,residentstructure
-   ; Open expansion.library
-   lea     expname(pc),a1
-   moveq   #0,d0
-   move.l  ABSEXECBASE,a6
-   CALLSYS  OpenLibrary
-   tst.l   d0
-   beq     close_and_dealloc
-	 move.l  d0,expansionlib
-   
-   PRINTF 1,<'Opened expansion lib: %lx',13,10>,D0
-   move.l  d0,a6
-
-   ;now build a fake config dev!
-   CALLSYS AllocConfigDev
-   PRINTF 1,<'Created Config dev: %lx',13,10>,D0
-   move.l  d0,configdev
-   beq     close_and_dealloc
-   ;init the ConfigDev
-   move.l  d0,a0
-   lea.l   fakebootrom(pc),a1
-   move.l  a1,cd_Rom+er_Reserved0c(a0) ;save the diag entry
-   move.l  #IDE_BASE_ADDRESS,cd_BoardAddr(a0) ;save the board adress
-   move.l  #65536,cd_BoardSize(a0) ;store the board size
-   move.b  #ERTF_DIAGVALID+ERT_ZORROII,cd_Rom+er_Type(a0) ; this makes the thing autoboot
-   move.w  #2588,cd_Rom+er_Manufacturer(a0) ;a1k org :D
-   move.b  #123,cd_Rom+er_Product(a0)
-   CALLSYS AddConfigDev ;add it to the system
 
 
-	 ;now open the device!
-   movem.l d1/a1/a6,-(SP)
-   ;device in a6
-   move.l residentstructure,a6
-   ;devicenum in d0
-   move.l #0,d0
-   ;flags in d1
-   move.l #0,d1
-   ;iohandler in a1
-   move.l  iohandler,a1
-   CALLLIB LIB_OPEN
-   PRINTF 1,<'Open returned %lx',13,10>,D0
-   movem.l (SP)+,d1/a1/a6
-   ;check result
-   cmp.b  #IOERR_OPENFAIL,D0   
-   beq close_and_dealloc
-   ;set up the iohandler:   
-   move.l   buffermem,IO_DATA(a1) ;this is the buffer we use
-   move.l   #512,IO_LENGTH(a1)    ;this is the size we use
+
+	 ;;now open the device!
+   ;movem.l d1/a1/a6,-(SP)
+   ;;device in a6
+   ;move.l residentstructure,a6
+   ;;devicenum in d0
+   ;move.l #0,d0
+   ;;flags in d1
+   ;move.l #0,d1
+   ;;iohandler in a1
+   ;move.l  iohandler,a1
+   ;CALLLIB LIB_OPEN
+   ;PRINTF 1,<'Open returned %lx',13,10>,D0
+   ;movem.l (SP)+,d1/a1/a6
+   ;;check result
+   ;cmp.b  #IOERR_OPENFAIL,D0   
+   ;beq close_and_dealloc
+   ;;set up the iohandler:   
+   ;move.l   buffermem,IO_DATA(a1) ;this is the buffer we use
+   ;move.l   #512,IO_LENGTH(a1)    ;this is the size we use
    
 
    ; Read rdb block here!
-   move.l #0,d0  
-   bsr read_block
+   ;move.l #0,d0  
+   ;bsr read_block
   
-   move.l  parametermem(PC),a3
-   lea		bootdosname(PC),a1
+   move.l  parametermem,a3
+   lea		bootdosname,a1
    move.l	a1,pp_dosName(a3)
-   lea		bootdevicename(PC),a1
+   lea		bootdevicename,a1
    move.l	a1,pp_execName(a3)
    move.l	#0,pp_unitNumber(a3)
    move.l	#1,pp_flags(a3)
@@ -220,8 +194,35 @@ device_present:
    move.l	#$00FFFFFF,pp_maxTransfer(a3)
    move.l	#$7FFFFFFE,pp_mask(a3)   
    move.l	#20,pp_bootPrio(a3)
-   move.l	#$444F5301,pp_dosType(a3) 		;OFS - FFS enddet mit 301
+   move.l	#$444F5301,pp_dosType(a3)
 
+   ; Open expansion.library
+   lea     expname,a1
+   moveq   #0,d0
+   move.l  ABSEXECBASE,a6
+   CALLSYS  OpenLibrary
+   tst.l   d0
+   beq     close_and_dealloc
+	 move.l  d0,expansionlib
+   
+   PRINTF 1,<'Opened expansion lib: %lx',13,10>,D0
+   move.l  d0,a6
+
+   ;now build a fake config dev!
+   CALLSYS AllocConfigDev
+   PRINTF 1,<'Created Config dev: %lx',13,10>,D0
+   move.l  d0,configdev
+   beq     close_and_dealloc
+   ;init the ConfigDev
+   move.l  d0,a0
+   lea.l   fakebootrom,a1
+   move.l  a1,cd_Rom+er_Reserved0c(a0) ;save the diag entry
+   move.l  #IDE_BASE_ADDRESS,cd_BoardAddr(a0) ;save the board adress
+   move.l  #65536,cd_BoardSize(a0) ;store the board size
+   move.b  #ERTF_DIAGVALID+ERT_ZORROII,cd_Rom+er_Type(a0) ; this makes the thing autoboot
+   move.w  #2588,cd_Rom+er_Manufacturer(a0) ;a1k org :D
+   move.b  #123,cd_Rom+er_Product(a0)
+   CALLSYS AddConfigDev ;add it to the system
 
 
    ; Create the DOS node.
@@ -270,16 +271,15 @@ device_present:
 
 
    ;set d0/d1: priority and startproc
-   move.l  parametermem(PC),a0	;first move parampacket to a0
-   move.l	  pp_bootPrio(a0),d0			this priority
+   move.l  parametermem,a0	;first move parampacket to a0
+   move.l   pp_bootPrio(a0),d0			this priority
    moveq.l	#ADNF_STARTPROC,d1	StartProc = true
    ;put the DeviceNode from mem in A0
-   move.l   devicenode(PC),a0 
+   move.l   devicenode,a0 
    ;load the ConfigDev in a1
-   move.l  configdev(PC),a1
+   move.l  configdev,a1
    CALLSYS  AddBootNode	
 	 PRINTF 1,<'AddBootNodeResult %xl',13,10>,d0
-	 
 
 close_and_dealloc:
    move.l  ABSEXECBASE,a6
@@ -323,24 +323,24 @@ dealloc_exit4:
    LINKSYS FreeMem,a6   
    move.l #0,iohandler   
 bomb:       
-   bsr     freedosnode
+   ;bsr     freedosnode
    move.l   devicebase,d0
    PRINTF 1,<'End: returning %lx',13,10>,D0
    movem.l (SP)+,d1-d4/a0-a6
    rts
 
-freedosnode:
-   tst.l   devicenode
-   beq     nothingtofree
-   movem.l a1/a6,-(SP)   
-   move.l  #DeviceNode_SIZEOF,d0
-   move.l  devicenode,a1
-   move.l  ABSEXECBASE,a6
-   LINKSYS FreeMem,a6   
-   move.l  #0,devicenode   
-   movem.l (SP)+,a1/a6
-nothingtofree;
-   rts
+;freedosnode:
+;   tst.l   devicenode
+;   beq     nothingtofree
+;   movem.l a1/a6,-(SP)   
+;   move.l  #DeviceNode_SIZEOF,d0
+;   move.l  devicenode,a1
+;   move.l  ABSEXECBASE,a6
+;   LINKSYS FreeMem,a6   
+;   move.l  #0,devicenode   
+;   movem.l (SP)+,a1/a6
+;nothingtofree;
+;   rts
 
 
 read_block ;blocknumber in d0,returns 0 if read is not successfull

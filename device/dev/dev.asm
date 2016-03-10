@@ -116,11 +116,8 @@ initDDescrip:
 subSysName:
 myName:     MYDEVNAME
 dosName:    DOSNAME
-;THESE from MYDEVI:
-;;VERSION:    EQU   1 
-;;REVISION:   EQU   2
-;;idString:   dc.b   'xxxDevice X.YZ (DD.MM.YYYY)',13,10,0
 idString: IDSTRINGMACRO ;This is from MYDEVI: include file
+
    ; Force word alignment (even address)
    ds.w   0
 Init:
@@ -144,7 +141,6 @@ funcTable:
    ;------ function table end marker
    dc.l  -1
 
-
 dataTable:
    INITBYTE LH_TYPE,NT_DEVICE
    INITLONG LN_NAME,myName
@@ -156,9 +152,6 @@ dataTable:
    INITBYTE md_tcb+LN_TYPE,NT_TASK
    INITBYTE md_tcb+LN_PRI,MYPROCPRI
    DC.L     0
-
-
-
 initRoutine:
    movem.l  d1/a0-a1/a3-a5,-(sp) ;Preserve ALL modified registers
    move.l   d0,a5
@@ -296,7 +289,7 @@ Close:      ;( device:a6, iob:a1 )
    move.l   d0,IO_DEVICE(a2)
 
    ;------ see if the unit is still in use
-;  subq.w   #1,UNIT_OPENCNT(a3)
+   subq.w   #1,UNIT_OPENCNT(a3)
 
 ;  bne.s    Close_Device
 ;  bsr      ExpungeUnit
@@ -364,18 +357,7 @@ Expunge_End:
 Null:
    moveq    #0,d0
    rts
-
-
-unit0mask   dc.l  0                 ;dont change unit#? data order
-unit1mask   dc.l  0
-unit0adr    dc.l  0
-unit1adr    dc.l  0
-unit0sigbit dc.l  0
-unit1sigbit dc.l  0
-devadr      dc.l  0
-
-
-
+   
 InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    movem.l  d2-d4/a2,-(sp)
@@ -478,6 +460,34 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
 ;  clr.l    md_Units(a6,d2.l)
 ;  movem.l  (sp)+,d2/a1
    rts
+
+   cnop  0,4
+
+;local registers
+unit0mask   dc.l  0                 ;dont change unit#? data order
+unit1mask   dc.l  0
+unit0adr    dc.l  0
+unit1adr    dc.l  0
+unit0sigbit dc.l  0
+unit1sigbit dc.l  0
+devadr      dc.l  0
+;emulated inquiry packet data
+EmulInquiry    dc.l $00000001,$1F000000,$4944452D,$454D554C,$20202020
+               dc.l $20202020,$20202020,$20202020,$312E3030
+;emulated mode_sense packet (page 3 and 4) data
+EmulMSPage3    dc.l $1B000000,$03160000,$00000000,$00000000,$02000000
+               dc.l $00000000,$80000000
+EmulMSPage4    dc.l $1B000000,$04160000,$00000000,$00000000,$00000000
+               dc.l $00000000,$0E100000
+   cnop  0,4
+
+mdu_Init:
+   ; ------ Initialize the unit
+   INITBYTE MP_FLAGS,PA_IGNORE
+   INITBYTE LN_TYPE,NT_DEVICE
+   INITLONG LN_NAME,myName
+   DC.L     0
+   cnop  0,4
 
 cmdtable:
 ;32bits ;Address     ;number of command; and its bit mask
@@ -700,16 +710,6 @@ rkf1
    movem.l  (sp)+,a2-a3/a4/a6/d2/d7
    rts
 
-   cnop  0,4
-;emulated inquiry packet data
-EmulInquiry    dc.l $00000001,$1F000000,$4944452D,$454D554C,$20202020
-               dc.l $20202020,$20202020,$20202020,$312E3030
-;emulated mode_sense packet (page 3 and 4) data
-EmulMSPage3    dc.l $1B000000,$03160000,$00000000,$00000000,$02000000
-               dc.l $00000000,$80000000
-EmulMSPage4    dc.l $1B000000,$04160000,$00000000,$00000000,$00000000
-               dc.l $00000000,$0E100000
-   cnop  0,4
 ;emualte scsi packets for ATAPI drive
 EmulateSCSI
    movem.l  d0/d1/a0/a2/a6,-(sp)
@@ -877,10 +877,10 @@ Motor:
    rts
 
 MyReset:
-   ;clr.l    IO_ACTUAL(a1)
-   ;bsr      TermIO
-   ;bsr  ResetIDE
-   ;rts
+   clr.l    IO_ACTUAL(a1)
+   bsr      TermIO
+   bsr  ResetIDE
+   rts
 AddChangeInt:
 RemChangeInt:
 MyRemove:
@@ -1079,23 +1079,6 @@ Proc_NextMessage:
 Proc_Unlock:
    and.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(a3)
    rts
-
-
-nic   dc.l  0
-alrt
-   movem.l  a5/a6,-(sp)
-   move.l   4,a6
-   lea      nic,a5
-   CALLSYS  Alert
-   movem.l  (sp)+,a5/a6
-   rts
-
-mdu_Init:
-   ; ------ Initialize the unit
-   INITBYTE MP_FLAGS,PA_IGNORE
-   INITBYTE LN_TYPE,NT_DEVICE
-   INITLONG LN_NAME,myName
-   DC.L     0
 
 EndCode:
    END         ;TM

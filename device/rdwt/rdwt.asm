@@ -136,8 +136,11 @@ atadrv
    move.w   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 kr3
    move.l   buffer,a5                  ;get identify data
-   move.l	#512,d0
-   RATADATAA5_D0_BYTES_LONG
+   move.l	#127,d0
+   move.l   #TF_DATA,a0
+kr3data
+   move.l   (a0),(a5)+
+   dbra     d0,kr3data
    move.l   buffer,a5                  
 
    ;IF Y=0 SWAP BYTES IN WORD BECAUSE AMIGA DATA0..7 IS DRIVE DATA8.15
@@ -456,8 +459,11 @@ readnextblk
    beq      rsfl
    WAITDRQ	D2,D3
    beq      rsfl
-   move.l	#512,d0
-   RATADATAA5_D0_BYTES_LONG
+   move.l	#127,d0
+   move.l   #TF_DATA,a0
+readnextblkdata
+   move.l   (a0),(a5)+
+   dbra     d0,readnextblkdata
    DLY5US                        ;wait DRQ go 0
    dbne     d4,readnextblk
    bsr      checkforerrors
@@ -479,8 +485,11 @@ writesectors ;d4 is the number of sectors to write (between 1 and 64)
 writenextoneblockki
    WAITDRQ	D2,D3
    beq      wekfha
-   move.l   #512,d0
-   WATADATAA5_D0_BYTES_LONG
+   move.l   #127,d0
+   move.l   #TF_DATA,a0
+writenextoneblockdata
+   move.l   (a5)+,(a0)
+   dbra     d0,writenextoneblockdata
    DLY5US                        ;BSY will go high within 5 microseconds after filling buffer
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
    WAITNOTBSY D2,D3
