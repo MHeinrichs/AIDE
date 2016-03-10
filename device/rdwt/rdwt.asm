@@ -13,8 +13,6 @@
 ; ! set tabs to 3 !
 
 ;READOPE AND WRITEOPE ARE DEFINED HERE AND XPORTED BY XDEF:S
-READOPE equ  $b00bdeed
-WRITEOPE equ $babecafe
    xdef READOPE
    xdef WRITEOPE
 
@@ -683,6 +681,7 @@ getCHS      ;convert block number to Cylinder / Head / Sector numbers
    and.l    #$ff,d1           ;cylinder high
    rts
 
+   Public ResetIDE
 ;SoftwareReset IDE-BUS
 ResetIDE
 	movem.l  d0,-(sp)

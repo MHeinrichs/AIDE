@@ -1,4 +1,5 @@
-   INCLUDE "IDE_BASE_ADDRESS.i"
+   ;INCLUDE "IDE_BASE_ADDRESS.i"
+   include "/new-version/IDE_BASE_ADDRESS.i" ;The base adress for the ide-driver
 TF  equ  IDE_BASE_ADDRESS+$1000+$2000; Task File base address + 3000hex
 CS0      equ  -$1000    ;Amiga A12 line is connected to ATA /CS0
 CS1      equ  -$2000    ;Amiga A13 line is connected to ATA /CS1

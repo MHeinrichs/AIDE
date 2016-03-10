@@ -44,6 +44,7 @@
    XREF  SelectDrive   ;Selects which drive to use (0/1)
    XREF  blink         ;Routine that blinks the power LED
    XREF  pause         ;Pause routine
+   XREF  ResetIDE
 
    XLIB  AddIntServer ;XLIB macro: XLIB Something => XREF _LVOSomething
    XLIB  RemIntServer 
@@ -876,6 +877,10 @@ Motor:
    rts
 
 MyReset:
+   ;clr.l    IO_ACTUAL(a1)
+   ;bsr      TermIO
+   ;bsr  ResetIDE
+   ;rts
 AddChangeInt:
 RemChangeInt:
 MyRemove:

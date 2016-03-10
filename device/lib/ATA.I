@@ -42,6 +42,9 @@ SRST  equ   bit2 ;software reset
 nIEN  equ   bit1 ;interrupt enable
                  ;bit0 always 0
 
+READOPE equ  $b00bdeed
+WRITEOPE equ $babecafe
+
 ;error register
 BBK   equ   bit7 ;bad block detected
 UNC   equ   bit6 ;uncorrectable data error
