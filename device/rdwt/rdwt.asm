@@ -57,7 +57,7 @@ BADOFFSET   equ "TISI"
 NOREADWRITE equ "PILU"
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called

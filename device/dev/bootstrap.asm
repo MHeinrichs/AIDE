@@ -58,7 +58,7 @@
    XREF InitDrive
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 TRUE  equ   1
 FALSE equ   0
@@ -113,7 +113,7 @@ endcopy:
 bootdevicename:
    dc.b    'ide.device',0
 expname:    dc.b    'expansion.library',0
-;mem_name:	dc.b "A1K_FastMEM",0
+mem_name:	dc.b "A1K_FastMEM",0
 	cnop	0,4
 
 bootname:
@@ -629,17 +629,17 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
    movem.l (SP)+,d0-d7/a0-a6
    rts
 
-;addmem:
-;	movem.l	d0-d2/a0-a1/a6,-(sp)
-;  move.l  ABSEXECBASE,a6
-;	move.l	#MEM_BASE,a0				; a0 = Basisadresse
-;	move.l	#MEM_SIZE,d0
-;	lea	    mem_name(pc),a1			; a1 = Name
-;	move.l	#MEM_PRIO,d2				; d2 = Priority
-;	move.l	#MEM_FLAGS,d1	; d1 = Typ
-;	CALLSYS	AddMemList			; Speicher einbinden
-;	movem.l	(sp)+,d0-d2/a0-a1/a6
-;	rts
+addmem:
+	movem.l	d0-d2/a0-a1/a6,-(sp)
+  move.l  ABSEXECBASE,a6
+	move.l	#MEM_BASE,a0				; a0 = Basisadresse
+	move.l	#MEM_SIZE,d0
+	lea	    mem_name,a1			; a1 = Name
+	move.l	#MEM_PRIO,d2				; d2 = Priority
+	move.l	#MEM_FLAGS,d1	; d1 = Typ
+	CALLSYS	AddMemList			; Speicher einbinden
+	movem.l	(sp)+,d0-d2/a0-a1/a6
+	rts
 
 endcode:
    end
