@@ -6,6 +6,11 @@ MEM_SIZE    EQU  $400000
 MEM_FLAGS   EQU  MEMF_PUBLIC+MEMF_FAST+MEMF_24BITDMA
 MEM_PRIO    EQU  10
 
+MAX_BLOCK_SEARCH_RDB equ 128
+
+BD_VERSION equ 1
+BD_REVISION equ 0
+
     STRUCTURE MyParmPkt,0
    APTR     pp_dosName
    APTR     pp_execName
@@ -30,7 +35,17 @@ MEM_PRIO    EQU  10
    ULONG    pp_dosType
    LABEL    MyParmPkt_Sizeof
 
-MAX_BLOCK_SEARCH_RDB equ 128
+    STRUCTURE MyMemPkt,0
+   ULONG    residentstructure
+   ULONG    buffermem
+   ULONG    rdbmem
+   ULONG    parametermem
+   ULONG    configdev
+   ULONG    expansionlib
+   ULONG    devicenode
+   ULONG    iohandler
+   ULONG    unitptr
+   ULONG    unitnum
+   LABEL    MyMemPkt_Sizeof
 
-BD_VERSION equ 1
-BD_REVISION equ 0
+
