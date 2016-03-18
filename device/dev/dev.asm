@@ -162,7 +162,6 @@ initRoutine:
  
    ;------ save a pointer to exec
    move.l   a6,md_SysLib(a5)
-   move.l   a5,devadr
 
    ;------ save a pointer to our loaded code
    move.l   a0,md_SegList(a5)
@@ -181,17 +180,17 @@ init1
    ;------ Allocate the signal for unit 0
    moveq    #-1,d0
    CALLSYS  AllocSignal 
-   move.l   d0,unit0sigbit
+   move.l   d0,md_Unit0sigbit(a5)
    moveq    #0,d1
    bset     d0,d1
-   move.l   d1,unit0mask
+   move.l   d1,md_Unit0mask(a5)
    ;------ Allocate the signal for unit 1
    moveq    #-1,d0
    CALLSYS  AllocSignal
-   move.l   d0,unit1sigbit
+   move.l   d0,md_Unit1sigbit(a5)
    moveq    #0,d1
    bset     d0,d1
-   move.l   d1,unit1mask
+   move.l   d1,md_Unit1mask(a5)
    ;------ Initialize the stack information
    lea      md_stack(a5),a0         ;Low end of stack
    move.l   a0,md_tcb+TC_SPLOWER(a5)
@@ -375,15 +374,18 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    LINKSYS  InitStruct,md_SysLib(a6)
 
-   ;------ save unit pointer and set unit signal bit
-   lea      unit0adr,a1
-   move.l   d2,d3
-   lsl.l    #2,d3
-   move.l   a3,0(a1,d3.w)
-   lea      unit0sigbit,a1
-   move.l   0(a1,d3.w),d0
+   ;------ save unit pointer and set unit signal bit   
+   cmp.l    #1,d2
+   beq      init_unit_1
+   move.l   a3,md_Unit0adr(a6)
+   move.l   md_Unit0sigbit(a6),d0
    move.b   d0,MP_SIGBIT(a3)
-
+   bra      set_default_values
+init_unit_1:
+   move.l   a3,md_Unit1adr(a6)
+   move.l   md_Unit1sigbit(a6),d0
+   move.b   d0,MP_SIGBIT(a3)
+set_default_values:
    ;------ default values
    move.b	#1,mdu_SectorBuffer(a3) ;device must at least handle one sector per read/write
    move.b	#1,mdu_actSectorCount(a3) 
@@ -437,7 +439,7 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    ;------ save the unit number
 ;  move.l   mdu_UnitNum(a3),d2
 ;  lsl.l    #2,d2
-;  lea      unit0mask,a1
+;  lea      md_Unit0mask(a6),a1
 ;  clr.l    0(a1,d2.w)           ;clear signal mask for unit
 ;  clr.l    8(a1,d2.w)           ;clear unit pointer
 ;  lsr.l    #2,d2
@@ -452,15 +454,6 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    rts
 
    cnop  0,4
-
-;local registers
-unit0mask   dc.l  0                 ;dont change unit#? data order
-unit1mask   dc.l  0
-unit0adr    dc.l  0
-unit1adr    dc.l  0
-unit0sigbit dc.l  0
-unit1sigbit dc.l  0
-devadr      dc.l  0
 ;emulated inquiry packet data
 EmulInquiry    dc.l $00000001,$1F000000,$4944452D,$454D554C,$20202020
                dc.l $20202020,$20202020,$20202020,$312E3030
@@ -1005,35 +998,36 @@ Flush_End:
    rts
 
 
-;  cnop     0,4                  ; long word allign
+  cnop     0,4                   ; long word allign
    DC.L     16                   ; segment length -- any number will do
 myproc_seglist:
    DC.L     0                    ; pointer to next segment
 
 ; the next instruction after the segment list is the first executable address
 Proc_Begin:
-   move.l   4,a6
-   move.l   devadr,a5
-   move.l   unit0mask,d7
-   or.l     unit1mask,d7
-   move.l   unit0adr,a3
+   move.l   ABSEXECBASE,a6
+   move.l   4(sp),a3           ; Unit pointer
+   move.l   mdu_Device(a3),a5  ; Point to device structure
+   move.l   md_Unit0mask(a5),d7
+   or.l     md_Unit1mask(a5),d7
+   move.l   md_Unit0adr(a5),a3
    bsr      Proc_CheckStatus
-   move.l   unit1adr,a3
+   move.l   md_Unit1adr(a5),a3
    bsr      Proc_CheckStatus
    ;------ main loop: wait for a new message
 Proc_MainLoop:
    move.l   d7,d0
    CALLSYS  Wait
    move.l   d0,-(sp)
-   and.l    unit0mask,d0
+   and.l    md_Unit0mask(a5),d0
    beq      pb3
-   move.l   unit0adr,a3
+   move.l   md_Unit0adr(a5),a3
    bsr      Proc_CheckStatus
 pb3
    move.l   (sp)+,d0
-   and.l    unit1mask,d0
+   and.l    md_Unit1mask(a5),d0
    beq      Proc_MainLoop
-   move.l   unit1adr,a3
+   move.l   md_Unit1adr(a5),a3
    bsr      Proc_CheckStatus
    bra      Proc_MainLoop
 

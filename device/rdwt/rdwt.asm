@@ -68,14 +68,15 @@ DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 
    PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
-   movem.l  d1/d2/d3/a0/a1/a5,-(sp)	 
+   movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
 ;get memory
+   move.l  ABSEXECBASE,a0
    move.l   #512,d0       ; we want 512 bytes for a buffer   
    move.l   #MEMF_ANY!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
-   LINKSYS  AllocMem,md_SysLib(a6)   
+   LINKSYS  AllocMem,a0
    tst.l    d0             ; memory ok?
    beq      wfc1
-   move.l   d0,buffer      ;save pointer
+   move.l   d0,d4      ;save pointer
    RATABYTE TF_STATUS,d0   ;clear drive interrupt line
    cmp.w    #TRUE,mdu_auto(a3)
    bne      notauto
@@ -139,13 +140,13 @@ satadrv
 atadrv
    move.w   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 kr3
-   move.l   buffer,a5                  ;get identify data
+   move.l   d4,a5                  ;get identify data
    move.l	#127,d0
    move.l   #TF_DATA,a0
 kr3data
    move.l   (a0),(a5)+
    dbra     d0,kr3data
-   move.l   buffer,a5                  
+   move.l   d4,a5                  
 
    ;IF Y=0 SWAP BYTES IN WORD BECAUSE AMIGA DATA0..7 IS DRIVE DATA8.15
    IFEQ Y,0
@@ -163,7 +164,7 @@ lk    move.w   (a0),d1
       movem.l  (sp)+,d1-d2 ;restore d1-d2
    ENDC
 
-   move.l   buffer,a5   ;copy serial number to internal info buffer
+   move.l   d4,a5   ;copy serial number to internal info buffer
    add.l    #20,a5			
    lea      mdu_ser_num(a3),a0
    move.b   #10,d0				
@@ -172,13 +173,13 @@ ckl1
    subq.b	#1,d0
    bne		ckl1
    move.b   #0,(a0)				;null termination of string
-   move.l   buffer,a5
+   move.l   d4,a5
    add.l    #46,a5
    lea      mdu_firm_rev(a3),a0  ;copy firm. revision to int. buffer 8byte = 2 longwords!
    move.l   (a5)+,(a0)+
    move.l   (a5)+,(a0)+
    move.b   #0,(a0)              ;null termination of string
-   move.l   buffer,a5
+   move.l   d4,a5
    add.l    #54,a5
    lea      mdu_model_num(a3),a0 ;copy model number to int. buffer 40 bytes = 10 longwords
    move.b   #10,d0				
@@ -197,7 +198,7 @@ ckl3
    WATABYTE #0,TF_FEATURES       ;for atapi cdrom with
    bra      kr2
 noeritd     ; ATA disk /SATA disk
-   move.l   buffer,a5
+   move.l   d4,a5
    moveq    #0,d0                ; clear upper 16 bit!
    move.w   1*2(a5),d0           ;Word 1 Number of logical cylinders
    move.l   d0,mdu_cylinders(a3) ;store to internal buffer
@@ -281,17 +282,18 @@ pis1
    WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
    WAITNOTBSY d1,d2
 kr2
-   move.l   buffer,d1 ;is there a pointer in buffer?
+   move.l   d4,d1 ;is there a pointer in buffer?
    tst.l    d1
    beq kr21
    
-   move.l   buffer,a1
+   move.l  ABSEXECBASE,a0
+   move.l   d4,a1
    move.l   #512,d0
-   LINKSYS FreeMem,md_SysLib(a6)
+   LINKSYS FreeMem,a0
    
 kr21:
-   move.l   #0,buffer
-   movem.l  (sp)+,d1/d2/d3/a0/a1/a5
+   move.l   #0,d4
+   movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a5
    rts
 ;----
 
@@ -630,11 +632,11 @@ rstwait2:
    PUBLIC   SelectDrive
 SelectDrive:
    ;movem.l  d0,-(sp)
-   move.l   act_Drive,d0
-   cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
-   beq      sdr3              ; just return from subroutine
+   ;move.l   act_Drive,d0
+   ;cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
+   ;beq      sdr3              ; just return from subroutine
    move.l   mdu_UnitNum(a3),d0
-   move.l   d0,act_Drive
+   ;move.l   d0,act_Drive
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
@@ -645,19 +647,12 @@ sdr3
    ;movem.l  (sp)+,d0
    rts
 
-;   cnop  0,4
-buffer      dc.l  0        ;buffer pointer for ATA/ATAPI IDENTIFY DRIVE
-act_Drive   dc.l  $FFFFFFFF      ; actual selected drive
-act_Actual  dc.l  0
+   cnop  0,4
 rs_cmd      dc.w  $0300,0,$2000,0,0,0 ;6 words
-act_cmd     dc.w  8                   ; one word
-act_Status  dc.b  0                   ; 
-act_Flags   dc.b  0                   ;*byle + word = 1 long -> allinged!
-sense_data  dc.b  20             ; sense data of last packet command 20bytes -> alligned!
 CP3044txt   dc.b  'CP3044 ',0    ; 8 bytes = 2 longwords ->alligned!
-;   cnop  0,4
+   cnop  0,4
    
-; a0 = scsi_Data, d0 = scsi_Length, a1(not a2?;ml) = scsi_Command, a6 = SCSICmd
+; a0 = scsi_Data, d0 = scsi_Length, a2 = scsi_Command, a6 = SCSICmd
 ; d2 = unit number, a3 = io_unit
 
    Public SCSIDirectCmd
@@ -676,23 +671,23 @@ sdc3
    bra      sdc2
 sdc5
    move.w   scsi_CmdLength(a6),d3
-   move.b   scsi_Flags(a6),act_Flags
+   move.b   scsi_Flags(a6),mdu_act_Flags(a3)
    bsr      Packet
-   move.l   act_Actual,d1
+   move.l   mdu_act_Actual(a3),d1
    add.l    d1,scsi_Actual(a6)
-   move.b   act_Status,scsi_Status(a6)
-   cmp.b    #$50,act_Status
+   move.b   mdu_act_Status(a3),scsi_Status(a6)
+   cmp.b    #$50,mdu_act_Status(a3)
    beq      sdc2
    clr.w    scsi_SenseActual(a6)
    move.b   #1,IO_ERROR(a1)
-   cmp.b    #$FF,act_Status         ;status = FFh means timeout
+   cmp.b    #$FF,mdu_act_Status(a3)         ;status = FFh means timeout
    bne      sdc1
    WATABYTE #$08,TF_COMMAND         ;then reset atapi device
    DLY400NS
    WAITNOTBSY d1,d2
    bra      sdc2
 sdc1                                ;read sense data if error
-   lea      sense_data,a5
+   lea      mdu_sense_data(a3),a5
    btst.b   #SCSIB_AUTOSENSE,scsi_Flags(a6)
    beq      sdc6
    move.w   scsi_SenseLength(a6),d1
@@ -702,13 +697,13 @@ sdc6
 sdc7
    move.w   #12,d3
    lea      rs_cmd,a2
-   move.b   #SCSIF_READ,act_Flags
+   move.b   #SCSIF_READ,mdu_act_Flags(a3)
    bsr      Packet                  ;do packet request sense
    btst.b   #SCSIB_AUTOSENSE,scsi_Flags(a6)
    beq      sdc9
    move.l   scsi_SenseData(a6),a5
-   lea      sense_data,a2
-   move.l   act_Actual,d0
+   lea      mdu_sense_data(a3),a2
+   move.l   mdu_act_Actual(a3),d0
    move.w   d0,scsi_SenseActual(a6)
    beq      sdc2
    subq.w   #1,d0
@@ -716,7 +711,7 @@ sdc8
    move.b   (a2)+,(a5)+
    dbra     d0,sdc8
 sdc9
-   lea      sense_data,a2
+   lea      mdu_sense_data(a3),a2
    move.b   2(a2),d0
    and.b    #$F,d0
    clr.l    mdu_no_disk(a3)
@@ -737,7 +732,7 @@ sdc2
 ;send packet to atapi drive and read/write data if needed
 Packet
    movem.l  a0-a4/d0-d6,-(sp)
-   clr.l    act_Actual
+   clr.l    mdu_act_Actual(a3)
    DLY400NS
    WAITNOTBSY D0,D6               ;wait till drive is not ready
    beq      pretec
@@ -761,7 +756,7 @@ Packet
    RATABYTE TF_STATUS,d0
    and.b    #ERR,d0
    bne      pa_err
-   lea      act_cmd,a1                 ;prepare packet
+   lea      mdu_act_cmd(a3),a1                 ;prepare packet
    clr.l    (a1)
    clr.l    4(a1)
    clr.l    8(a1)
@@ -771,7 +766,7 @@ pa2
    move.w   (a2)+,(a1)+
    subq.w   #1,d3
    bne      pa2
-   lea      act_cmd,a1
+   lea      mdu_act_cmd(a3),a1
    WATAWORD (a1)+,TF_DATA              ;write packet to drive
    WATAWORD (a1)+,TF_DATA
    WATAWORD (a1)+,TF_DATA
@@ -809,7 +804,7 @@ pa6
    RATABYTE TF_CYLINDER_HIGH,d3        ;else read data length
    lsl.w    #8,d3
    RATABYTE TF_CYLINDER_LOW,d3
-   move.l   d3,act_Actual
+   move.l   d3,mdu_act_Actual(a3)
    btst     #0,d3
    beq      pa7
    addq.l   #1,d3 ;add one, if odd length
@@ -821,7 +816,7 @@ pa7
    move.l   a5,d0
    and.l    #1,d0
    bne      pa_err
-   btst.b   #SCSIB_READ_WRITE,act_Flags   ;read or write required?
+   btst.b   #SCSIB_READ_WRITE,mdu_act_Flags(a3)   ;read or write required?
    beq      pa9
 pa8              
    ; read data from drive
@@ -855,7 +850,7 @@ pa10
    WAITNOTBSY D1,D6
    beq      pretec
    RATABYTE TF_STATUS,d1
-   move.b   d1,act_Status
+   move.b   d1,mdu_act_Status(a3)
    and.b    #ERR,d1                    ;test, if error occured
    bne      pa_err
 pa11
@@ -864,14 +859,14 @@ pa11
    rts                                 ;return from Packet
 
 pretec                                 ;if timeout, return status=FFh
-   move.b   #$FF,act_Status
+   move.b   #$FF,mdu_act_Status(a3)
    bra      pa11
 pa_err                                 ;if error, return actual status
-   RATABYTE TF_STATUS,act_Status
+   RATABYTE TF_STATUS,mdu_act_Status(a3)
    bra      pa11
 
 pa_zero                                ;if zero length occured, return AAh
-   move.b   #$AA,act_Status
+   move.b   #$AA,mdu_act_Status(a3)
    bra      pa11
 
    PUBLIC   pause
