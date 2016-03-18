@@ -196,6 +196,7 @@ init1
    move.l   a0,md_tcb+TC_SPLOWER(a5)
    lea      MYPROCSTACKSIZE(a0),a0  ;High end of stack
    move.l   a0,md_tcb+TC_SPUPPER(a5)
+   move.l   a5,-(A0)                  ; argument -- device ptr (send on stack)
    move.l   a0,md_tcb+TC_SPREG(a5)
    lea      md_tcb(a5),a1
    lea      Proc_Begin(PC),a2
@@ -1006,8 +1007,7 @@ myproc_seglist:
 ; the next instruction after the segment list is the first executable address
 Proc_Begin:
    move.l   ABSEXECBASE,a6
-   move.l   4(sp),a3           ; Unit pointer
-   move.l   mdu_Device(a3),a5  ; Point to device structure
+   move.l   4(sp),a5           ; device pointer
    move.l   md_Unit0mask(a5),d7
    or.l     md_Unit1mask(a5),d7
    move.l   md_Unit0adr(a5),a3

@@ -48,6 +48,7 @@ MD_NUMUNITS EQU   $2
    LABEL    MyDev_Sizeof
 
     STRUCTURE MyDevUnit,UNIT_SIZE
+   STRUCT   mdu_PortSpacer,48   ;spacer for messageportstructure (is only 32byte, but who knows!)
    APTR     mdu_Device
    ULONG    mdu_UnitNum
    ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
