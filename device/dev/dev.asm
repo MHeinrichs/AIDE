@@ -159,7 +159,6 @@ initRoutine:
 ; DO INITIALIZE THE INTERFACE NOW, macro from INTERFACEI: include file
    INITATAINTERFACE
 ;------------------
-   PRINTF 1,<'Init ide.device',13,10>
  
    ;------ save a pointer to exec
    move.l   a6,md_SysLib(a5)
@@ -172,7 +171,6 @@ initRoutine:
    ;in errors during coldstart, because there is no doslib at coldstart!
 
    ;lea.l    dosName,A1              ;Get dos lib. name
-   ;PRINTF 1,<'opening %s',13,10>,A1
    ;moveq    #0,D0
    ;CALLSYS  OpenLibrary             ;Open the dos library
    ;move.l   d0,md_DosLib(a5)
@@ -180,25 +178,19 @@ initRoutine:
    ;ALERT    AG_OpenLib!AO_DOSLib
    ;bra      init_error
 init1
-   PRINTF 1,<'Trying to alloc signal for unit 0',13,10>
    ;------ Allocate the signal for unit 0
    moveq    #-1,d0
    CALLSYS  AllocSignal 
    move.l   d0,unit0sigbit
-   PRINTF 1,<'Alloc signal ide.device Unit 0: %lx',13,10>,d0
    moveq    #0,d1
    bset     d0,d1
    move.l   d1,unit0mask
-   PRINTF 1,<'Unitmask ide.device Unit 0: %lx',13,10>,d1
    ;------ Allocate the signal for unit 1
-   PRINTF 1,<'Trying to alloc signal for unit 1',13,10>
    moveq    #-1,d0
    CALLSYS  AllocSignal
    move.l   d0,unit1sigbit
-   PRINTF 1,<'Alloc signal ide.device Unit 1: %lx',13,10>,d0
    moveq    #0,d1
    bset     d0,d1
-   PRINTF 1,<'Unitmask ide.device Unit 1: %lx',13,10>,d1
    move.l   d1,unit1mask
    ;------ Initialize the stack information
    lea      md_stack(a5),a0         ;Low end of stack
@@ -210,19 +202,16 @@ init1
    lea      Proc_Begin(PC),a2
    lea      -1,a3             ;generate address error if task ever "returns".
    moveq    #0,d0
-   PRINTF 1,<'AddTask',13,10>
    CALLSYS  AddTask  ;A task for doing things...
    move.l   a5,d0
    bra      init_end
 init_error:
    moveq    #0,d0
 init_end:
-   PRINTF 1,<'End ide.device returns: %lx',13,10>,D0
    movem.l  (sp)+,d1/a0-a1/a3-a5
    rts
 
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
-   PRINTF 1,<'Open ide.device %lx unit %lx flags %lx',13,10>a6,d0,d1
    movem.l  d2/a2-a4,-(sp)
    move.l   a1,a2                   ; save the iob
    ;------ see if the unit number is in range
@@ -243,9 +232,10 @@ opn1
    bsr      InitUnit
    ;------ see if it initialized OK
    move.l   (a4),d0
-   beq.s    Open_Error
+   beq      Open_Error
 
 Open_UnitOK:
+
    move.l   d0,a3                   ;unit pointer in a3
    move.l   d0,IO_UNIT(a2)
 
@@ -360,7 +350,7 @@ Null:
    
 InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
-   movem.l  d2-d4/a2,-(sp)
+   movem.l  d2-d4/a1-a2,-(sp)
 
    ;------ allocate unit memory
    move.l   #MyDevUnit_Sizeof,d0
@@ -419,7 +409,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
    move.b   #PA_SIGNAL,MP_FLAGS(a3)
 InitUnit_End:
 
-   movem.l  (sp)+,d2-d4/a2
+   movem.l  (sp)+,d2-d4/a1-a2
    rts
 ;------ got an error - free the unit structure that we allocated.
 InitUnit_FreeUnit:

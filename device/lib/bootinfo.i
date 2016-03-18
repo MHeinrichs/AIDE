@@ -1,4 +1,5 @@
-BLOCKSIZE   EQU   $FF
+BLOCKSIZE   EQU   $200
+MAXLENGTH   EQU  31
 
 
     STRUCTURE MyParmPkt,0
@@ -25,6 +26,7 @@ BLOCKSIZE   EQU   $FF
    ULONG    pp_dosType
    LABEL    MyParmPkt_Sizeof
 
+MAX_BLOCK_SEARCH_RDB equ 128
 
 BD_VERSION equ 1
 BD_REVISION equ 0
