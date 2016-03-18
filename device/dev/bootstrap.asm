@@ -39,6 +39,7 @@
    XLIB	AllocMem
    XLIB	FreeMem
    XLIB	MakeDosNode
+   XLIB	AddMemList
    XLIB	AddDosNode
    XLIB	OpenLibrary
    XLIB	CloseLibrary
@@ -56,7 +57,7 @@
    XREF ATARdWt
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 		ENDC
 
    moveq  #-1,d0 
@@ -85,31 +86,28 @@ initRoutine:
    PRINTF 1,<'Start',13,10>
    move.l   d0,devicebase
 		
+	 ;bsr addmem	
+   move.l  ABSEXECBASE,a6
    ; Get 512 bytes of memory for sector buffer
    move.l  #BLOCKSIZE,d0
-   moveq.l #MEMF_ANY,d1
-   move.l  ABSEXECBASE,a6
-   LINKSYS  AllocMem,a6
+   move.l  #MEMF_ANY!MEMF_CLEAR,d1
+   CALLSYS AllocMem
    tst.l   d0
    beq     close_and_dealloc
-   move.l  d0,buffermem
-   
-   ;PRINTF 1,<'alloc %ld bytes for blockbuffer at %lx',13,10>,#BLOCKSIZE,D0
-   
+   move.l  d0,buffermem  
 
    ; Get 512 bytes of memory for rdb buffer
    move.l  #BLOCKSIZE,d0
-   moveq.l #MEMF_ANY,d1
-   move.l  ABSEXECBASE,a6
-   CALLSYS  AllocMem
+   move.l  #MEMF_ANY!MEMF_CLEAR,d1
+   CALLSYS AllocMem
    tst.l   d0
    beq     close_and_dealloc
    move.l  d0,rdbmem
 
    ; get mem for parameter packet
    move.l  #MyParmPkt_Sizeof,d0
-   moveq.l #MEMF_ANY,d1
-   CALLSYS  AllocMem
+   move.l  #MEMF_ANY!MEMF_CLEAR,d1
+   CALLSYS AllocMem
    tst.l   d0
    beq     close_and_dealloc
    move.l  d0,parametermem
@@ -117,8 +115,8 @@ initRoutine:
       
    ; get mem for io handler
    move.l  #IOSTD_SIZE,d0
-   moveq.l #MEMF_ANY,d1
-   CALLSYS  AllocMem
+   move.l  #MEMF_ANY!MEMF_CLEAR,d1
+   CALLSYS AllocMem
    tst.l   d0
    beq     close_and_dealloc
    move.l  d0,iohandler
@@ -129,7 +127,7 @@ initRoutine:
    lea	bootdevicename,a1	; the device name to look for
    lea	DeviceList(a6),a0	; in Device-Liste suchen.
    CALLSYS	FindName   
-   ;PRINTF 1,<'Seach in device list for %s resulted in %lx',13,10>,A1,D0
+   PRINTF 1,<'Seach in device list for %s resulted in %lx',13,10>,A1,D0
    tst.l	d0   
    bne device_present
    
@@ -146,7 +144,7 @@ initRoutine:
 	 
 	 CALLSYS InitResident
    
-	 ;PRINTF 1,<'InitResident resulted in %lx',13,10>,D0
+	 PRINTF 1,<'InitResident resulted in %lx',13,10>,D0
 	 beq     close_and_dealloc
    
 device_present:
@@ -179,9 +177,7 @@ device_present:
    move.b  #123,cd_Rom+er_Product(a0)
    CALLSYS AddConfigDev ;add it to the system
 
-
    move.l  #0,unitnum
-
 next_unit:
 	 ;now open the device!
    move.l  unitnum,d0
@@ -192,8 +188,6 @@ next_unit:
    beq close_and_dealloc
    move.l  iohandler,a1
    move.l  IO_UNIT(a1),unitptr
-
-   
 
    ; Read rdb block here!
    moveq  #0,d4
@@ -223,6 +217,7 @@ rdb_found:
    move.l #IDNAME_PARTITION,d6
    move.l rdb_PartitionList(a0),d0 ;there is our first partition
    move.l buffermem,a0 ;work on buffermem now!
+   
 nextpartition:
    PRINTF 1,<'Loading partition in block: %lx',13,10>,d0
    lsl    #8,d0 ;multiply by 512
@@ -262,7 +257,7 @@ found_partition
    moveq  #16,d0                   ; 17 long word comming one less for dbra
 copy_param_packet:
    move.l (a0)+,(a3)+
-   dbra   d0,copy_param_packet     ; 
+   dbra   d0,copy_param_packet     
    ;restore buffers
    move.l buffermem,a0 
    move.l parametermem,a3
@@ -270,24 +265,6 @@ copy_param_packet:
    ;bsr print_param_packet  
    btst.b   #PBFB_NOMOUNT,pp_flags+3(a3) ;+3 for long to byte
    bne      preparenextpartition   
-
-;   bra close_and_dealloc
-;   move.l	#128,pp_blockSize(a3)    ; 128*4=512 bytes in long words
-;   move.l	#0,pp_sectorOrigin(a3)    ;leave 0
-;   move.l	#1,pp_surfaces(a3) ;
-;   move.l	#1,pp_sectorsPerBlock(a3) 		;leave 1
-;   move.l	#288,pp_blocksPerTrack(a3)
-;   move.l	#2,pp_reservedBlocks(a3)
-;   move.l	#0,pp_preface(a3); leave 0
-;   move.l	#0,pp_interleave(a3)
-;   move.l	#2,pp_lowCyl(a3)
-;   move.l	#433,pp_highCyl(a3)
-;   move.l	#300,pp_numBuffer(a3)
-;   move.l	#MEMF_ANY,pp_BufferMemType(a3)
-;   move.l	#$00FFFFFF,pp_maxTransfer(a3)
-;   move.l	#$7FFFFFFE,pp_mask(a3)   
-;   move.l	#20,pp_bootPrio(a3)
-;   move.l	#$444F5301,pp_dosType(a3)
 
    ; Create the DOS node.
    move.l  a3,a0
@@ -322,7 +299,6 @@ more_units:
    beq    close_and_dealloc
    move.l #10,unitnum
    bra    next_unit
-   
 
 close_and_dealloc:
    move.l  ABSEXECBASE,a6
@@ -366,31 +342,17 @@ dealloc_exit4:
    move.l #0,iohandler   
 dealloc_exit5:
    tst.l   rdbmem ;mem allocated?
-   beq     dealloc_exit2
+   beq     end_dealloc
    move.l  rdbmem,a1
    move.l  #BLOCKSIZE,d0
    ;PRINTF 1,<'Free %ld byte buffer mem at %lx',13,10>,d0,a1
    LINKSYS FreeMem,a6
    move.l #0,rdbmem
-bomb:       
-   ;bsr     freedosnode
+end_dealloc:       
    move.l   devicebase,d0
    PRINTF 1,<'End: returning %lx',13,10>,D0
    movem.l (SP)+,d1-d7/a0-a6
    rts
-
-;freedosnode:
-;   tst.l   devicenode
-;   beq     nothingtofree
-;   movem.l a1/a6,-(SP)   
-;   move.l  #DeviceNode_SIZEOF,d0
-;   move.l  devicenode,a1
-;   move.l  ABSEXECBASE,a6
-;   LINKSYS FreeMem,a6   
-;   move.l  #0,devicenode   
-;   movem.l (SP)+,a1/a6
-;nothingtofree;
-;   rts
 
 open_device:
    movem.l d1/a1/a6,-(SP)
@@ -403,7 +365,7 @@ open_device:
    ;iohandler in a1
    move.l  iohandler,a1
    CALLLIB LIB_OPEN
-   ;PRINTF 1,<'Open returned %lx',13,10>,D0
+   PRINTF 1,<'Open returned %lx',13,10>,D0
    movem.l (SP)+,d1/a1/a6
    rts
 
@@ -520,12 +482,6 @@ clear_block_loop:
    rts
 
 read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successfull
-   ;PRINTF 1,<'Status pre read:',13,10>
-   ;PRINTF 1,<'D0: %8lx D1: %8lx D2: %8lx D3: %8lx ',13,10>,d0,d1,d2,d3
-   ;PRINTF 1,<'D4: %8lx D5: %8lx D6: %8lx D7: %8lx ',13,10>,d4,d5,d6,d7
-   ;PRINTF 1,<'A0: %8lx A1: %8lx A2: %8lx A3: %8lx ',13,10>,a0,a1,a2,a3
-   ;PRINTF 1,<'A4: %8lx A5: %8lx A6: %8lx SP: %8lx ',13,10>,a4,a5,a6,sp
-
    movem.l d0-d7/a0-a6,-(SP)  
    bsr    clear_block ;clear old result first!
 
@@ -546,15 +502,21 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
    ;PRINTF 1,<'Call ATRdWt',13,10>
    bsr ATARdWt
    ;PRINTF 1,<'Returning reading block with %lx',13,10>,d0   
-
    movem.l (SP)+,d0-d7/a0-a6
-   ;PRINTF 1,<'Status post read:',13,10>
-   ;PRINTF 1,<'D0: %8lx D1: %8lx D2: %8lx D3: %8lx ',13,10>,d0,d1,d2,d3
-   ;PRINTF 1,<'D4: %8lx D5: %8lx D6: %8lx D7: %8lx ',13,10>,d4,d5,d6,d7
-   ;PRINTF 1,<'A0: %8lx A1: %8lx A2: %8lx A3: %8lx ',13,10>,a0,a1,a2,a3
-   ;PRINTF 1,<'A4: %8lx A5: %8lx A6: %8lx SP: %8lx ',13,10>,a4,a5,a6,sp
-
    rts
+
+;addmem:
+;	movem.l	d0-d2/a0-a1/a6,-(sp)
+;  move.l  ABSEXECBASE,a6
+;	move.l	#MEM_BASE,a0				; a0 = Basisadresse
+;	move.l	#MEM_SIZE,d0
+;	lea	    mem_name(pc),a1			; a1 = Name
+;	move.l	#MEM_PRIO,d2				; d2 = Priority
+;	move.l	#MEM_FLAGS,d1	; d1 = Typ
+;	CALLSYS	AddMemList			; Speicher einbinden
+;	movem.l	(sp)+,d0-d2/a0-a1/a6
+;	rts
+
 
 devicebase: dc.l 0
 residentstructure: dc.l 0
@@ -602,6 +564,8 @@ bootdevicename:
 bootdosname:
    dc.b    'DH0',0
 expname:    dc.b    'expansion.library',0
+;mem_name:	dc.b "A1K_FastMEM",0
+	cnop	0,4
 
 endcode:
    end

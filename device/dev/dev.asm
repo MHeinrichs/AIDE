@@ -354,7 +354,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
    ;------ allocate unit memory
    move.l   #MyDevUnit_Sizeof,d0
-   move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+   move.l   #MEMF_ANY!MEMF_CLEAR,d1
    LINKSYS  AllocMem,md_SysLib(a6)
 
    move.l   d0,a3
