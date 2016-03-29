@@ -70,7 +70,10 @@ DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 InitDrive   ;a3 = unitptr
    movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
 ;get memory
-   move.l  ABSEXECBASE,a0
+   moveq   #0,d4
+   bsr      SelectDrive	
+	 bne			wfc1														 ;no drive present!
+   move.l   ABSEXECBASE,a0
    move.l   #512,d0       ; we want 512 bytes for a buffer   
    move.l   #MEMF_ANY!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
    LINKSYS  AllocMem,a0
@@ -82,8 +85,6 @@ InitDrive   ;a3 = unitptr
    bne      notauto
 ;get drive parameters
    move.w   #CHS_ACCESS,mdu_lba(a3)               ;presumption
-   bsr      SelectDrive	
-	 beq			wfc1														 ;no drive present!
    WATABYTE #ATA_IDENTIFY_DRIVE,TF_COMMAND   ;get drive data
    WAITNOTBSY D1,D2
    beq      wfc1
@@ -242,7 +243,7 @@ multiple_sector_dis
 nolba                            ;Then its CHS
    move.w   #CHS_ACCESS,mdu_lba(a3)   ;store to internal buffer
    ;Conner Peripherals CP3044 lies about its default translation mode
-   lea      CP3044txt,a0
+   lea      CP3044txt(pc),a0
    move.l   a5,a1
    add.l    #$50,a1
 ko move.b   (a0)+,d0
@@ -309,7 +310,7 @@ ATARdWt:
    movem.l  d1-d7/a0-a6,-(sp)
    move.l   d0,d3			  ;save length to somewhere save
    bsr      SelectDrive
-   beq      errcode
+   bne      errcode
    move.l   #BADUNIT,d0       ;Check that unit is 0 or 1
    cmp.l    #1,d2		     
    bgt      Quits
@@ -462,6 +463,7 @@ readnextblk
 readnextblkdata
    move.l   (a0),(a5)+
    dbra     d0,readnextblkdata
+;   RATADATAA5_512_BYTES
    DLY5US                        ;wait DRQ go 0
    dbne     d4,readnextblk
    ;check for errors
@@ -631,24 +633,29 @@ rstwait2:
 ;perform safe switch to act_drv drive
    PUBLIC   SelectDrive
 SelectDrive:
-   ;movem.l  d0,-(sp)
-   ;move.l   act_Drive,d0
-   ;cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
-   ;beq      sdr3              ; just return from subroutine
+   movem.l  a0,-(sp)
+   move.l   mdu_Device(a3),a0
+   move.l   md_act_Drive(a0),d0
+   cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
+   beq      sdr4              ; just successfully return from subroutine
    move.l   mdu_UnitNum(a3),d0
-   ;move.l   d0,act_Drive
+   move.l   d0,md_act_Drive(a0)
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
    DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
-   RATABYTE	TF_STATUS,d0				, clear interrupt liner
-sdr3
-   moveq.l  #1,d0                ; clear zero flag
-   ;movem.l  (sp)+,d0
+   RATABYTE	TF_STATUS,d0				; clear interrupt line
+   ;check if it worked: write something to the sector count and read it back
+   WATABYTE  #$5A,TF_SECTOR_NUMBER
+   RATABYTE	TF_SECTOR_NUMBER,d0				
+   cmp.b     #$5A,d0
+   beq      sdr4   
+   move.l   #1,d0                ; clear zero flag
+sdr4
+   movem.l  (sp)+,a0
    rts
 
    cnop  0,4
-rs_cmd      dc.w  $0300,0,$2000,0,0,0 ;6 words
 CP3044txt   dc.b  'CP3044 ',0    ; 8 bytes = 2 longwords ->alligned!
    cnop  0,4
    
@@ -660,7 +667,7 @@ SCSIDirectCmd
    movem.l  a0-a6/d0-d6,-(sp)
    move.l   d0,d1 ;save d0 somewhere save
    bsr      SelectDrive
-   beq      sdc1
+   bne      sdc1
    move.l   a0,a5
 sdc3
    and.l    #$FFFF0000,d0           ;no more than 64KB at once now :-(
@@ -696,7 +703,7 @@ sdc6
    move.w   #20,d1
 sdc7
    move.w   #12,d3
-   lea      rs_cmd,a2
+   lea      mdu_rs_cmd(a3),a2
    move.b   #SCSIF_READ,mdu_act_Flags(a3)
    bsr      Packet                  ;do packet request sense
    btst.b   #SCSIB_AUTOSENSE,scsi_Flags(a6)

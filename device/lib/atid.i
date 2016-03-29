@@ -130,6 +130,7 @@ gre\@
    dbra     d0,gre\@
   endm
 
+
 ;write macros
 WATADATAA5_D0_BYTES_LONG macro
    move.l   #TF_DATA,a0

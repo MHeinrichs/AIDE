@@ -371,7 +371,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
    move.l   a1,MP_SIGTASK(a3)
    moveq.l  #0,d0                   ;Dont need to re-zero it
    move.l   a3,a2                   ;InitStruct is initializing the UNIT
-   lea.l    mdu_Init,A1
+   lea.l    mdu_Init(PC),A1
 
    LINKSYS  InitStruct,md_SysLib(a6)
 
@@ -402,6 +402,40 @@ set_default_values:
    move.w   #TRUE,mdu_motor(a3)     ;units usually start up with motor on
    move.l   #0,mdu_change_cnt(a3)
    move.l   #FALSE,mdu_no_disk(a3)
+   ; new: init the scsi-emulation-packages Inquiry, MSPage3 and MSPage4
+   lea.l    mdu_EmulInquiry(a3),a1
+   move.l   #$00000001,(a1)+
+   move.l   #$1F000000,(a1)+
+   move.l   #$4944452D,(a1)+
+   move.l   #$454D554C,(a1)+
+   move.l   #$20202020,(a1)+
+   move.l   #$20202020,(a1)+
+   move.l   #$20202020,(a1)+
+   move.l   #$20202020,(a1)+
+   move.l   #$312E3030,(a1)+
+   lea.l    mdu_EmulMSPage3(a3),a1
+   move.l   #$1B000000,(a1)+
+   move.l   #$03160000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$02000000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$80000000,(a1)+
+   lea.l    mdu_EmulMSPage4(a3),a1
+   move.l   #$1B000000,(a1)+
+   move.l   #$04160000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$00000000,(a1)+
+   move.l   #$0E100000,(a1)+
+   lea.l    mdu_rs_cmd(a3),a1
+   move.w  #$0300,(a1)+
+   move.w  #$0000,(a1)+
+   move.w  #$2000,(a1)+
+   move.w  #$0000,(a1)+
+   move.w  #$0000,(a1)+
+   move.w  #$0000,(a1)+
 
    ;------ mark us as ready to go
    move.l   d2,d0                   ;unit number
@@ -453,25 +487,6 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
 ;  clr.l    md_Units(a6,d2.l)
 ;  movem.l  (sp)+,d2/a1
    rts
-
-   cnop  0,4
-;emulated inquiry packet data
-EmulInquiry    dc.l $00000001,$1F000000,$4944452D,$454D554C,$20202020
-               dc.l $20202020,$20202020,$20202020,$312E3030
-;emulated mode_sense packet (page 3 and 4) data
-EmulMSPage3    dc.l $1B000000,$03160000,$00000000,$00000000,$02000000
-               dc.l $00000000,$80000000
-EmulMSPage4    dc.l $1B000000,$04160000,$00000000,$00000000,$00000000
-               dc.l $00000000,$0E100000
-   cnop  0,4
-
-mdu_Init:
-   ; ------ Initialize the unit
-   INITBYTE MP_FLAGS,PA_IGNORE
-   INITBYTE LN_TYPE,NT_DEVICE
-   INITLONG LN_NAME,myName
-   DC.L     0
-   cnop  0,4
 
 cmdtable:
 ;32bits ;Address     ;number of command; and its bit mask
@@ -755,7 +770,7 @@ page03
    move.l   d1,scsi_Actual(a6)
    subq.l   #1,d1
    bmi      escsi4
-   lea      EmulMSPage3,a2
+   lea      mdu_EmulMSPage3(a3),a2
    move.l   mdu_sectors_per_track(a3),d0
    move.w   d0,14(a2)
    bra      escsi15
@@ -763,7 +778,7 @@ page04
    move.l   d1,scsi_Actual(a6)
    subq.l   #1,d1
    bmi      escsi4
-   lea      EmulMSPage4,a2
+   lea      mdu_EmulMSPage4(a3),a2
    move.l   mdu_cylinders(a3),d0
    move.l   d1,-(sp)
    move.l   d0,d1
@@ -816,13 +831,13 @@ setcapa
 scsi_inq                               ; Inquiry packet
    lea      mdu_model_num(a3),a2
 
-   lea      EmulInquiry+8,a0
+   lea      8+mdu_EmulInquiry(a3),a0
 
    move.l   (a2)+,(a0)+
    move.l   (a2),(a0)+
 
    lea      mdu_ser_num(a3),a2
-   lea      EmulInquiry+16,a0
+   lea      16+mdu_EmulInquiry(a3),a0
    move.l   (a2)+,(a0)+
    move.l   (a2)+,(a0)+
    move.l   (a2)+,(a0)+
@@ -837,7 +852,7 @@ escsi2
    subq.l   #1,d1
    bmi      escsi4
    move.l   scsi_Data(a6),a0
-   lea      EmulInquiry,a2
+   lea      mdu_EmulInquiry(a3),a2
 escsi3
    move.b   (a2)+,(a0)+
    dbra     d1,escsi3
@@ -1063,6 +1078,15 @@ Proc_NextMessage:
 Proc_Unlock:
    and.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(a3)
    rts
+   cnop  0,4
+
+mdu_Init:
+   ; ------ Initialize the unit
+   INITBYTE MP_FLAGS,PA_IGNORE
+   INITBYTE LN_TYPE,NT_DEVICE
+   INITLONG LN_NAME,myName
+   DC.W     0
+   cnop  0,4
 
 EndCode:
    END         ;TM

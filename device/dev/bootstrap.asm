@@ -126,7 +126,7 @@ initRoutine:
    movem.l d1-d7/a0-a6,-(SP)
    PRINTF 1,<'Start',13,10>
 	 move.l  d0,d7	
-	 ;bsr addmem	
+	 bsr addmem
    move.l  ABSEXECBASE,a6
    
    ;get structure for a mem-pointer-package

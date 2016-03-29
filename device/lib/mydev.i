@@ -40,6 +40,7 @@ MD_NUMUNITS EQU   $2
    ULONG    md_Unit1adr ;this one must be directly after Unit0adr because it will be set by an offset!
    ULONG    md_Unit0sigbit
    ULONG    md_Unit1sigbit
+   ULONG    md_act_Drive
    UBYTE    md_Flags
    UBYTE    md_pad
    STRUCT   md_Units,MD_NUMUNITS*4
@@ -63,20 +64,22 @@ MD_NUMUNITS EQU   $2
    STRUCT   mdu_ser_num,24       ;serial number:20Chars + 1null byte +3pad
    STRUCT   mdu_firm_rev,12      ;firware revision: 8 chars + 1 null byte +3pad
    STRUCT   mdu_model_num,44     ;model number: 40 chars + 1 null byte +3 pad
+   STRUCT   mdu_act_cmd,16       ;actual SCSI-Command (8 words = 16 bytes)
+   STRUCT   mdu_EmulInquiry,9*4
+   STRUCT   mdu_EmulMSPage3,7*4
+   STRUCT   mdu_EmulMSPage4,7*4
+   STRUCT   mdu_rs_cmd,6*2       
    UWORD    mdu_drv_type         ;see bellow for possible values
    UWORD    mdu_firstcall        ;was drive called yet?
    UWORD    mdu_auto             ;get drive parameters automatic? = TRUE
    UWORD    mdu_lba              ;use LBA? For ATAPI always TRUE
    UWORD    mdu_motor            ;motor status
-   UWORD    mdu_act_cmd,8        ;actual SCSI-Command
    UBYTE    mdu_SigBit           ;Signal bit allocated for interrupts
    UBYTE    mdu_SectorBuffer	 ;max number of sectors per transfer block
    UBYTE    mdu_actSectorCount	 ;actual number of sectors per transfer block   
    UBYTE    mdu_act_Flags        ;actual SCSI-Packet Flags
    UBYTE    mdu_act_Status			 ;actual SCSI-Status
    UBYTE    mdu_pad1
-   UBYTE    mdu_pad2
-   UBYTE    mdu_pad3
    LABEL    MyDevUnit_Sizeof
 
 ;drive types
@@ -101,11 +104,11 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDEDevice 2.24 (24.02.2016)",13,10,0
+      dc.b    "IDEDevice 2.25 (29.03.2016)",13,10,0
       ENDM
 
 VERSION equ 2
-REVISION equ 24
+REVISION equ 25
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0
