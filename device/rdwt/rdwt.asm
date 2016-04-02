@@ -266,22 +266,22 @@ notauto
    beq      setupata
    bra		kr2
 setupata
-   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
-   bge			kr2
-   move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
-   WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
-   move.l   mdu_heads(a3),d0           ;LBA support
-   subq.b   #1,d0
-   or.b     #$a0,d0
-   tst.l    mdu_UnitNum(a3)
-   beq      pis1
-   bset   #4,d0
-pis1
-   WATABYTE d0,TF_DRIVE_HEAD
-   DLY400NS
-   bsr      waitreadytoacceptnewcommand
-   WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-   WAITNOTBSY d1,d2
+;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
+;   bge			kr2
+;   move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
+;   WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
+;   move.l   mdu_heads(a3),d0           ;LBA support
+;   subq.b   #1,d0
+;   or.b     #$a0,d0
+;   tst.l    mdu_UnitNum(a3)
+;   beq      pis1
+;   bset   #4,d0
+;pis1
+;   WATABYTE d0,TF_DRIVE_HEAD
+;   DLY400NS
+;   bsr      waitreadytoacceptnewcommand
+;   WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
+;   WAITNOTBSY d1,d2
 kr2
    move.l   d4,d1 ;is there a pointer in buffer?
    tst.l    d1
@@ -359,14 +359,7 @@ errcode
    beq      errcodeend
    cmp.w    #SATAPI_DRV,mdu_drv_type(a3)
    beq      errcodeend
-   move.l   mdu_UnitNum(a3),d0;Reset drive - some drives may freeze at bad block
-   lsl.b    #4,d0
-   or.b     #$a0,d0
-   WATABYTE d0,TF_DRIVE_HEAD
-   ;DLY5US
-   ;WATABYTE #8+SRST+nIEN,TF_DEVICE_CONTROL   ;no int., reset ;nIEN=2 SRST=4
-   ;bsr      pause
-   ;WATABYTE #8+nIEN,TF_DEVICE_CONTROL
+   ;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
    bsr      ResetIDE
 errcodeend
    bclr.b   #1,$bfe001        ;Amiga power led on
@@ -422,13 +415,12 @@ issueread
 
 issueCHSread
    bsr      getCHS
-   move.l   d0,-(sp)
    move.l   mdu_UnitNum(a3),d0
    lsl.b    #4,d0
    or.b     d2,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
-   move.l   (sp)+,d0
+   move.l   d6,d0
    WATABYTE d4,TF_SECTOR_COUNT
    WATABYTE d0,TF_CYLINDER_LOW
    WATABYTE d1,TF_CYLINDER_HIGH
@@ -439,6 +431,10 @@ issueLBAread
    move.l   mdu_UnitNum(a3),d2
    lsl.b    #4,d2
    add.b    #L,d2
+   rol.l    #8,d0                      ;put upper 4 bits of d0 into lower 4bit of d2
+   and.l    #$0000000f,d0               
+   or.l     d0,d2
+   move.l   d6,d0                      ;restore d0   
    WATABYTE d2,TF_DRIVE_HEAD           ;L=lba  lba bits 24..27
    WATABYTE d4,TF_SECTOR_COUNT
    WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
@@ -458,12 +454,12 @@ readnextblk
    beq      rsfl
    WAITDRQ	D2,D3
    beq      rsfl
-   move.l	#127,d0
-   move.l   #TF_DATA,a0
-readnextblkdata
-   move.l   (a0),(a5)+
-   dbra     d0,readnextblkdata
-;   RATADATAA5_512_BYTES
+;   move.l	#127,d0
+;   move.l   #TF_DATA,a0
+;readnextblkdata
+;   move.l   (a0),(a5)+
+;   dbra     d0,readnextblkdata
+   RATADATAA5_512_BYTES
    DLY5US                        ;wait DRQ go 0
    dbne     d4,readnextblk
    ;check for errors
@@ -479,8 +475,6 @@ rsfl                             ;some error in reading
    move.l   #1,d0
    rts
 
-
-
 writesectors ;d4 is the number of sectors to write (between 1 and 64)
    cmp.l    #0,d0
    bne      wekfha
@@ -492,13 +486,12 @@ issuewrite
 
 issueCHSwrite
    bsr      getCHS
-   move.l   d0,-(sp)
    move.l   mdu_UnitNum(a3),d0
    lsl.b    #4,d0
    or.b     d2,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
-   move.l   (sp)+,d0
+   move.l   d6,d0
    WATABYTE d4,TF_SECTOR_COUNT
    WATABYTE d0,TF_CYLINDER_LOW
    WATABYTE d1,TF_CYLINDER_HIGH
@@ -509,6 +502,10 @@ issueLBAwrite
    move.l   mdu_UnitNum(a3),d2
    lsl.b    #4,d2
    add.b    #L,d2
+   rol.l    #8,d0                      ;put upper 4 bits of d0 into lower 4bit of d2
+   and.l    #$0000000f,d0               
+   or.l     d0,d2
+   move.l   d6,d0                      ;restore d0
    WATABYTE d2,TF_DRIVE_HEAD           ;L=lba; lba bits 24..27
    WATABYTE d4,TF_SECTOR_COUNT
    WATABYTE d0,TF_SECTOR_NUMBER        ;LBA  bits  0..7
@@ -524,11 +521,12 @@ sendwritecommand:
 writenextoneblockki
    WAITDRQ	D2,D3
    beq      wekfha
-   move.l   #127,d0
-   move.l   #TF_DATA,a0
-writenextoneblockdata
-   move.l   (a5)+,(a0)
-   dbra     d0,writenextoneblockdata
+;   move.l   #127,d0
+;   move.l   #TF_DATA,a0
+;writenextoneblockdata
+;   move.l   (a5)+,(a0)
+;   dbra     d0,writenextoneblockdata
+   WATADATAA5_512_BYTES  
    DLY5US                        ;BSY will go high within 5 microseconds after filling buffer
    RATABYTE TF_STATUS,d0         ;Also clears the disabled interrupt
    ;check for errors
@@ -633,13 +631,13 @@ rstwait2:
 ;perform safe switch to act_drv drive
    PUBLIC   SelectDrive
 SelectDrive:
-   movem.l  a0,-(sp)
-   move.l   mdu_Device(a3),a0
-   move.l   md_act_Drive(a0),d0
-   cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
-   beq      sdr4              ; just successfully return from subroutine
+   ;movem.l  a0,-(sp)
+   ;move.l   mdu_Device(a3),a0
+   ;move.l   md_act_Drive(a0),d0
+   ;cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
+   ;beq      sdr4              ; just successfully return from subroutine
    move.l   mdu_UnitNum(a3),d0
-   move.l   d0,md_act_Drive(a0)
+   ;move.l   d0,md_act_Drive(a0)
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
@@ -652,7 +650,7 @@ SelectDrive:
    beq      sdr4   
    move.l   #1,d0                ; clear zero flag
 sdr4
-   movem.l  (sp)+,a0
+   ;movem.l  (sp)+,a0
    rts
 
    cnop  0,4

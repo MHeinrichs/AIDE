@@ -56,9 +56,14 @@
    XLIB AddConfigDev
    XREF ATARdWt
    XREF InitDrive
+   XREF ResetIDE
 
 		IFND	DEBUG_DETAIL
 DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+		ENDC
+		
+		IFND	BIND_MEM
+BIND_MEM	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 TRUE  equ   1
 FALSE equ   0
@@ -126,9 +131,11 @@ initRoutine:
    movem.l d1-d7/a0-a6,-(SP)
    PRINTF 1,<'Start',13,10>
 	 move.l  d0,d7	
-	 bsr addmem
+   IFGE	BIND_MEM-1	
+   bsr addmem
+   ENDC
    move.l  ABSEXECBASE,a6
-   
+   ;bsr ResetIDE
    ;get structure for a mem-pointer-package
    move.l  #MyMemPkt_Sizeof,d0
    move.l  #MEMF_ANY+MEMF_CLEAR,d1
@@ -229,14 +236,14 @@ device_present:
    CALLSYS AddConfigDev ;add it to the system
 
    move.l  #0,unitnum(a5)
-next_unit:
+check_unit:
 	 ;now open the device!
    move.l  unitnum(a5),d0
 	 PRINTF 1,<'Opening unit %lx',13,10>,d0
 	 bsr open_device
    ;check result
    cmp.b  #IOERR_OPENFAIL,D0   
-   beq close_and_dealloc
+   beq next_unit
 
    ; Read rdb block here!
    moveq  #0,d4
@@ -245,11 +252,11 @@ next_unit:
 
 search_rdb:
    cmp.l  #MAX_BLOCK_SEARCH_RDB,d4
-   bge.l  more_units  ;nothing found!
+   bge.l  next_unit  ;nothing found!
    move.l rdbmem(a5),a0
    PRINTF 1,<'Searching for rdb at block %ld, offset %lx',13,10>,d4,d0
    bsr    read_block
-   bne    more_units ;on error go to next unit
+   bne    next_unit ;on error go to next unit
    ;theoretically i have to checksum it...
    move.l rdb_ID(a0),d5
    ;PRINTF 1,<'block id: %lx, expected: %lx',13,10>,d5,d6
@@ -266,40 +273,39 @@ rdb_found:
    move.l rdb_PartitionList(a0),d0 ;there is our first partition
    move.l buffermem(a5),a0 ;work on buffermem now!
    
-nextpartition:
+prepare_partition:
    PRINTF 1,<'Loading partition in block: %lx',13,10>,d0
    lsl    #8,d0 ;multiply by 512
    lsl    #1,d0
    bsr    read_block
-   bne    more_units ;on error go to next unit
+   bne    next_unit ;on error go to next unit
    move.l pb_ID(a0),d5
    cmp.l  d5,d6
    beq    found_partition 
-   bra    more_units
+   bra    next_unit
       
 found_partition   
    lea.l	pb_DriveName(a0),a1	;get the drive name (BSTR)
 	 clr.w	d1
 	 move.b	(a1)+,d1		;null terminate it (for safety)
 	 clr.b	0(a1,d1.w)
-   ; TODO: now check for dos-name duplicates   
+   ; now check for dos-name duplicates   
    lea.l	pb_DriveName(a0),a1	;get the drive name (BSTR)
    move.b	(a1)+,d1            ;BSTR->ASTR
-   PRINTF 1,<'Found Dos name: %s, length %lx',13,10>,a1,d1
+   ;PRINTF 1,<'Found Dos name: %s, length %lx',13,10>,a1,d1
    bsr    patch_dosname
    bne    close_and_dealloc ; error in name patch
-   
+   PRINTF 1,<'Found Dos name: %s, length %lx',13,10>,a1,d1
    move.l parametermem(a5),a3
-   lea.l	pb_DriveName(a0),a1	;get the drive name (BSTR)
-   move.b	(a1)+,d1            ;BSTR->ASTR
    move.l	a1,pp_dosName(a3)
    lea		bootdevicename,a1
    move.l	a1,pp_execName(a3)
-   move.l unitptr(a5),a1
-   move.l mdu_UnitNum(a1),d1
+   move.l unitnum(a5),d1
+   beq    unit_num_correct
+   move.l #10,d1
+unit_num_correct:   
    move.l	d1,pp_unitNumber(a3)
    move.l	pb_Flags(a0),pp_flags(a3)
-   ;move.l	#16,pp_paramSize(a3)     ; 16 longwords comming
    lea.l	pb_Environment(a0),a0    ; start of origin
    lea.l  pp_paramSize(a3),a3      ; start of destination (first word after flag)
    moveq  #16,d0                   ; 17 long word comming one less for dbra
@@ -309,8 +315,9 @@ copy_param_packet:
    ;restore buffers
    move.l buffermem(a5),a0 
    move.l parametermem(a5),a3
-   
-   ;bsr print_param_packet  
+   IFGE	DEBUG_DETAIL-2
+   bsr print_param_packet  
+   ENDC
    btst.b   #PBFB_NOMOUNT,pp_flags+3(a3) ;+3 for long to byte
    bne      preparenextpartition   
 
@@ -338,15 +345,15 @@ add_node:
 preparenextpartition:
    move.l buffermem(a5),a0
    move.l pb_Next(a0),d0
-   PRINTF 1,<'Next partition in block: %lx',13,10>,d0
+   ;PRINTF 1,<'Next partition in block: %lx',13,10>,d0
    cmp.l  #$FFFFFFFF,d0
-   bne    nextpartition
-more_units:   
+   bne    prepare_partition
+next_unit:   
    bsr    close_device
-   cmp.l  #10,unitnum(a5)
+   cmp.l  #1,unitnum(a5)
    beq    close_and_dealloc
-   move.l #10,unitnum(a5)
-   bra    next_unit
+   move.l #1,unitnum(a5)
+   bra    check_unit
 
 close_and_dealloc:
    move.l  ABSEXECBASE,a6
@@ -421,13 +428,13 @@ open_device:
 ;   move.l  iohandler(a5),a1
 ;   move.l  IO_UNIT(a1),unitptr(a5)
 ;   movem.l (SP)+,d1/a1/a6
-;   rtsd
+;   rts
 
    movem.l d1/a3/a1/a6,-(SP)
    move.l  ABSEXECBASE,a6
    move.l  unitptr(a5),d0
    bne     unit_allready_there
-   PRINTF  1,<'Opening unit',13,10>
+   ;PRINTF  1,<'Opening unit',13,10>
    move.l  #MyDevUnit_Sizeof,d0
    move.l  #MEMF_ANY+MEMF_CLEAR,d1
    CALLSYS AllocMem
@@ -435,7 +442,7 @@ open_device:
    beq     open_error;
    
 unit_allready_there:
-   PRINTF 1,<'Opend unit at %lx',13,10>,d0
+   ;PRINTF 1,<'Opend unit at %lx',13,10>,d0
    move.l   d0,a3
    move.l   d0,unitptr(a5)
    
@@ -458,7 +465,7 @@ unit_allready_there:
    move.l   d0,mdu_UnitNum(a3)
    bsr      InitDrive 
    move.w   mdu_drv_type(a3),d0
-   PRINTF 1,<'Unit is of type %d',13,10>,d0
+   ;PRINTF 1,<'Unit is of type %d',13,10>,d0
    cmp.w    #ATA_DRV,d0
    beq      open_ok
    cmp.w    #SATA_DRV,d0
@@ -480,17 +487,17 @@ open_error:
    move.l  #0,unitptr(a5)
 open_error_end:
    movem.l (SP)+,d1/a3/a1/a6
-   move.l  #IOERR_OPENFAIL,d0
-   rts
+   move.l #IOERR_OPENFAIL,d0
+  rts
 
-close_device:
+close_device
 ;   movem.l a1/a6,-(SP)
-;   ;device in a6
-;   move.l residentstructure(a5),a6
-;   ;iohandler in a1
-;   move.l  iohandler(a5),a1
+;   ;devic in a6
+;   move.l reidentstructure(a5),a6
+;   ;ihandler in a1
+;   mov.l  iohandler(a5),a1
 ;   CALLLIB LIB_CLOSE
-;   ;PRINTF 1,<'Close returned %lx',13,10>,D0
+;  ;PRINTF 1,<'Close r;etuned %lx',13,10>,D0
 ;   movem.l (SP)+,a1/a6
 ;   rts
    movem.l d0/a1/a6,-(SP)
@@ -506,28 +513,34 @@ close_end:
    rts
 
 patch_dosname: 
-   movem.l d1/a0/a1/a6,-(SP)    
-   PRINTF  1,<'Patching string %s',13,10>,a1
+   movem.l a0/a6,-(SP)    
+   ;PRINTF  1,<'Patching string %s',13,10>,a1
    ;first find the end of the string:
-   moveq   #0,d1     ;look from start
+   moveq.l #0,d1     ;look from start
+   move.l  a1,a0
 test_string:
-   cmp.b   #0,0(a1,d1.w)
+   cmp.b   #0,(a0)+
    beq     end_of_string_found
-   addq.w  #1,d1
-   cmp.w   #MAXLENGTH,d1
+   addq.l  #1,d1
+   cmp.l   #MAXLENGTH,d1
    bls     test_string
-   PRINTF  1,<'Name too long: %d',13,10>,d1
+   ;PRINTF  1,<'Name too long: %d',13,10>,d1
    moveq   #1,d0 ;anything not null is an error!
    bra     end_patch_dosname 
 end_of_string_found
+   move.l  a1,-(SP)    ;strange bug! I have to put A1 on stack and pop it again?!?
+   move.l  (SP)+,a1
 
-   PRINTF  1,<'String %s has a length of %ld',13,10>,a1,d1
+
+   ;PRINTF  1,<'String %s has a length of %ld',13,10>,a1,d1
    ;name to look for is in a1!
-   move.l  ABSEXECBASE,a6
-   lea	   eb_MountList(a6),a0 ;see if we allready have this name in the mountlist   
+   move.l  expansionlib(a5),a6
 patch_dosname_again:
-   CALLSYS FindName
-   PRINTF  1,<'FindName resulted in %ld',13,10>,d0
+   lea     eb_MountList(a6),a0 ;find the BootNode entries
+   tst.l   a0
+   beq     end_patch_dosname ; list empty!
+   bsr     FindSameName      
+   ;PRINTF  1,<'FindSameName resulted in %ld',13,10>,d0
    tst.l   d0
    beq     end_patch_dosname ; no dups = all ok!
    ;we have to modify this name d1 holds the end of the string!
@@ -535,73 +548,118 @@ patch_dosname_again:
    move.b	 #"x",0(a1,d1.w)   
    clr.b	 1(a1,d1.w); null terminate!
    addq.w  #1,d1
-   PRINTF  1,<'New name is %s, length %d',13,10>,a1,d1
+   ;PRINTF  1,<'New name is %s, length %d',13,10>,a1,d1
    cmp.w   #MAXLENGTH,d1
    ble     patch_dosname_again ;max length reached?
-   PRINTF  1,<'Name too long: %d',13,10>,d1
+   ;PRINTF  1,<'Name too long: %d',13,10>,d1
    moveq   #1,d0 ;anything not null is an error!
 end_patch_dosname:
-   movem.l (SP)+,d1/a0/a1/a6
+   movem.l (SP)+,a0/a6
    rts
 
-;print_param_packet:
-;   movem.l d0/a0/a3,-(SP)
-;   move.l parametermem(a5),a3
-;   move.l	pp_execName(a3),a0
-;   PRINTF 1,<'Device: %s',13,10>,a0
-;   move.l  pp_dosName(a3),a0
-;   PRINTF 1,<'Dos Name: %s',13,10>,a0
-;   move.l pp_unitNumber(a3),d0
-;   PRINTF 1,<'Unit: %ld',13,10>,d0
-;   move.l pp_flags(a3),d0
-;   PRINTF 1,<'Flags: %ld',13,10>,d0
-;   move.l pp_paramSize(a3),d0
-;   PRINTF 1,<'Environment size: %ld',13,10>,d0
-;   move.l pp_blockSize(a3),d0
-;   PRINTF 1,<'Block size: %ld',13,10>,d0
-;   move.l	pp_sectorOrigin(a3),d0
-;   PRINTF 1,<'Sector origin: %ld',13,10>,d0
-;   move.l	pp_surfaces(a3),d0
-;   PRINTF 1,<'Surfaces: %ld',13,10>,d0
-;   move.l	pp_sectorsPerBlock(a3),d0
-;   PRINTF 1,<'Sectors per block: %ld',13,10>,d0
-;   move.l	pp_blocksPerTrack(a3),d0
-;   PRINTF 1,<'Blocks per track: %ld',13,10>,d0
-;   move.l	pp_reservedBlocks(a3),d0
-;   PRINTF 1,<'Reserved blocks: %ld',13,10>,d0
-;   move.l	pp_preface(a3),d0
-;   PRINTF 1,<'Preface: %ld',13,10>,d0
-;   move.l	pp_interleave(a3),d0
-;   PRINTF 1,<'Interleave: %ld',13,10>,d0
-;   move.l	pp_lowCyl(a3),d0
-;   PRINTF 1,<'Low cylinder: %ld',13,10>,d0
-;   move.l	pp_highCyl(a3),d0
-;   PRINTF 1,<'High cylinder: %ld',13,10>,d0
-;   move.l	pp_numBuffer(a3),d0
-;   PRINTF 1,<'Num Buffers: %ld',13,10>,d0
-;   move.l	pp_BufferMemType(a3),d0
-;   PRINTF 1,<'Buffer type: %ld',13,10>,d0
-;   move.l	pp_maxTransfer(a3),d0
-;   PRINTF 1,<'Max transfer: %lx',13,10>,d0
-;   move.l	pp_mask(a3),d0
-;   PRINTF 1,<'Mask: %lx',13,10>,d0
-;   move.l	pp_bootPrio(a3),d0
-;   PRINTF 1,<'Boot prio: %ld',13,10>,d0
-;   move.l	pp_dosType(a3),d0
-;   PRINTF 1,<'Dostype: %lx',13,10>,d0
-;   movem.l (SP)+,d0/a0/a3
-;   rts
+FindSameName: 
+   ;(a0 = eb_MountList, a1 name of boot node (null terminated), d1 length of dosname)
+   movem.l d1-d2/a0-a3,-(SP)    
+next_dos_node:
+   SUCC	  a0,d0			; Get next node
+	 beq    good_end_FindSameName	; last: no dublets found!
+	 ;PRINTF 1,<'Checking node at %ld',13,10>,d0
+   move.l d0,a0      ;new node
+   ;moveq  #0,d0
+   ;move.b LN_TYPE(a0),d0
+   ;PRINTF  1,<'It is a Node of type %ld',13,10>,d0
+   ;check type
+   ;cmp.b	#NT_BOOTNODE,LN_TYPE(a0)
+   ;bne.s  next_dos_node
+	 ;PRINTF  1,<'It is a Boot Node',13,10>
+   ;check the name
+   move.l bn_DeviceNode(a0),a2 ;get the device node
+   move.l	dn_Name(a2),d0		; get the name (BPTR!)
+   beq    next_dos_node
+   lsl.l	#2,d0			; BPTR address divided by 4! mult*4 gets the address of the BSTR 
+   move.l	d0,a2     ; now a2 holds the BSTR
+   addq.l	#1,a2			; a2 points to the string null terminated!
+   ;PRINTF  1,<'Node name is %s',13,10>,a2
+   move.l d1,d2      ; get max length of test string
+   move.l a1,a3      ; get a save adress copy of the string in a1
+string_test_loop:
+   cmp.b	(a2)+,(a3)+		  ; compare caracters
+   bne  	next_dos_node		; not equal: next node!
+   subq.l #1,d2           ; end of length reached?
+   bne.s	string_test_loop		
+   ; equal: arg!
+   ;PRINTF  1,<'Names are equal!',13,10>
+bad_end_FindSameName:
+   move.l  #-1,d0
+   bra     end_FindSameName
+good_end_FindSameName:
+   ;PRINTF  1,<'No equal names found!',13,10>
+   move.l  #0,d0   
+end_FindSameName:
+   movem.l (SP)+,d1-d2/a0-a3
+   rts
+
+
+   IFGE	DEBUG_DETAIL-2	
+print_param_packet:
+   movem.l d0/a0/a3,-(SP)
+   move.l parametermem(a5),a3
+   move.l	pp_execName(a3),a0
+   PRINTF 1,<'Device: %s',13,10>,a0
+   move.l  pp_dosName(a3),a0
+   PRINTF 1,<'Dos Name: %s',13,10>,a0
+   move.l pp_unitNumber(a3),d0
+   PRINTF 1,<'Unit: %ld',13,10>,d0
+   move.l pp_flags(a3),d0
+   PRINTF 1,<'Flags: %ld',13,10>,d0
+   move.l pp_paramSize(a3),d0
+   PRINTF 1,<'Environment size: %ld',13,10>,d0
+   move.l pp_blockSize(a3),d0
+   PRINTF 1,<'Block size: %ld',13,10>,d0
+   move.l	pp_sectorOrigin(a3),d0
+   PRINTF 1,<'Sector origin: %ld',13,10>,d0
+   move.l	pp_surfaces(a3),d0
+   PRINTF 1,<'Surfaces: %ld',13,10>,d0
+   move.l	pp_sectorsPerBlock(a3),d0
+   PRINTF 1,<'Sectors per block: %ld',13,10>,d0
+   move.l	pp_blocksPerTrack(a3),d0
+   PRINTF 1,<'Blocks per track: %ld',13,10>,d0
+   move.l	pp_reservedBlocks(a3),d0
+   PRINTF 1,<'Reserved blocks: %ld',13,10>,d0
+   move.l	pp_preface(a3),d0
+   PRINTF 1,<'Preface: %ld',13,10>,d0
+   move.l	pp_interleave(a3),d0
+   PRINTF 1,<'Interleave: %ld',13,10>,d0
+   move.l	pp_lowCyl(a3),d0
+   PRINTF 1,<'Low cylinder: %ld',13,10>,d0
+   move.l	pp_highCyl(a3),d0
+   PRINTF 1,<'High cylinder: %ld',13,10>,d0
+   move.l	pp_numBuffer(a3),d0
+   PRINTF 1,<'Num Buffers: %ld',13,10>,d0
+   move.l	pp_BufferMemType(a3),d0
+   PRINTF 1,<'Buffer type: %ld',13,10>,d0
+   move.l	pp_maxTransfer(a3),d0
+   PRINTF 1,<'Max transfer: %lx',13,10>,d0
+   move.l	pp_mask(a3),d0
+   PRINTF 1,<'Mask: %lx',13,10>,d0
+   move.l	pp_bootPrio(a3),d0
+   PRINTF 1,<'Boot prio: %ld',13,10>,d0
+   move.l	pp_dosType(a3),d0
+   PRINTF 1,<'Dostype: %lx',13,10>,d0
+   movem.l (SP)+,d0/a0/a3
+   rts
+   ENDC
 
 clear_block
    movem.l d0/a0,-(SP)
-   PRINTF 1,<'Clearing address %lx',13,10>,a0
+   ;PRINTF 1,<'Clearing address %lx',13,10>,a0
    moveq #0,d0
 clear_block_loop:   
    move.l	#0,(a0)+
    addq.w #4,d0
    cmp.w  #BLOCKSIZE,d0
    blt    clear_block_loop
-   PRINTF 1,<'Cleared: %lx bytes, end adress: %lx',13,10>,d0,a0
+   ;PRINTF 1,<'Cleared: %lx bytes, end adress: %lx',13,10>,d0,a0
    movem.l (SP)+,d0/a0
    rts
 
@@ -629,6 +687,7 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
    movem.l (SP)+,d0-d7/a0-a6
    rts
 
+   IFGE	BIND_MEM-1	
 addmem:
 	movem.l	d0-d2/a0-a1/a6,-(sp)
   move.l  ABSEXECBASE,a6
@@ -640,6 +699,7 @@ addmem:
 	CALLSYS	AddMemList			; Speicher einbinden
 	movem.l	(sp)+,d0-d2/a0-a1/a6
 	rts
+   ENDC
 
 endcode:
    end

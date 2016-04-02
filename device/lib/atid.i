@@ -95,6 +95,31 @@ gre2\@
   endm
 
 ;read macros
+RATADATAA5_512_BYTES macro
+   move.l   #TF_DATA,a0
+   ;d0 must be < $0002000
+   moveq.l  #7,d0       ;bytes to long and loop unrolling: 8 times -1 for dbra
+gre3\@
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   move.l   (a0),(a5)+
+   dbra     d0,gre3\@
+  endm
+
+;read macros
 RATADATAA5_D0_BYTES_64 macro
    move.l   #TF_DATA,a0
    ;d0 must be < $0002000
@@ -165,6 +190,31 @@ cva2\@
    move.l   (a5)+,(a0)
    dbra     d0,cva2\@
  endm
+
+;write macros
+WATADATAA5_512_BYTES macro
+   move.l   #TF_DATA,a0
+   moveq.l  #7,d0     ;bytes to long and loop unrolling: 8 times -1 for dbra
+cva3\@
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   move.l   (a5)+,(a0)
+   dbra     d0,cva3\@
+ endm
+
 
 
 WATADATAA5_D0_BYTES macro
