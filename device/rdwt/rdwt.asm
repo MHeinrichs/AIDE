@@ -221,6 +221,7 @@ multiple_sector_dis
    move.w   61*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
    swap   d0
    or.w     60*2(a5),d0
+   and.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
    move.l   d0,mdu_numlba(a3)    ;store to internal buffer
    beq      nolba                ;propably no lba support if no lba sectors
    move.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
@@ -268,20 +269,20 @@ notauto
 setupata
 ;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
 ;   bge			kr2
-;   move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
-;   WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
-;   move.l   mdu_heads(a3),d0           ;LBA support
-;   subq.b   #1,d0
-;   or.b     #$a0,d0
-;   tst.l    mdu_UnitNum(a3)
-;   beq      pis1
-;   bset   #4,d0
-;pis1
-;   WATABYTE d0,TF_DRIVE_HEAD
-;   DLY400NS
-;   bsr      waitreadytoacceptnewcommand
-;   WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-;   WAITNOTBSY d1,d2
+   move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
+   WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
+   move.l   mdu_heads(a3),d0           ;LBA support
+   subq.b   #1,d0
+   or.b     #$a0,d0
+   tst.l    mdu_UnitNum(a3)
+   beq      pis1
+   bset   #4,d0
+pis1
+   WATABYTE d0,TF_DRIVE_HEAD
+   DLY400NS
+   bsr      waitreadytoacceptnewcommand
+   WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
+   WAITNOTBSY d1,d2
 kr2
    move.l   d4,d1 ;is there a pointer in buffer?
    tst.l    d1
@@ -631,26 +632,20 @@ rstwait2:
 ;perform safe switch to act_drv drive
    PUBLIC   SelectDrive
 SelectDrive:
-   ;movem.l  a0,-(sp)
-   ;move.l   mdu_Device(a3),a0
-   ;move.l   md_act_Drive(a0),d0
-   ;cmp.l    mdu_UnitNum(a3),d0 ; check if this drive si the last selected one
-   ;beq      sdr4              ; just successfully return from subroutine
    move.l   mdu_UnitNum(a3),d0
-   ;move.l   d0,md_act_Drive(a0)
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD
    DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
-   RATABYTE	TF_STATUS,d0				; clear interrupt line
+   ;RATABYTE	TF_STATUS,d0				; clear interrupt line
    ;check if it worked: write something to the sector count and read it back
-   WATABYTE  #$5A,TF_SECTOR_NUMBER
-   RATABYTE	TF_SECTOR_NUMBER,d0				
-   cmp.b     #$5A,d0
-   beq      sdr4   
-   move.l   #1,d0                ; clear zero flag
+   ;WATABYTE  #$5A,TF_SECTOR_NUMBER
+   ;RATABYTE	TF_SECTOR_NUMBER,d0				
+   ;cmp.b     #$5A,d0
+   ;beq      sdr4   
+   ;move.l   #1,d0                ; clear zero flag
 sdr4
-   ;movem.l  (sp)+,a0
+   move.l   #0,d0                ; clear zero flag
    rts
 
    cnop  0,4

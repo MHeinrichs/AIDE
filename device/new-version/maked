@@ -2,9 +2,13 @@ ASSIGN IDE_BASE_ADDRESS: IDE_BASE_ADDRESS.i  ;the base address
 
 
 assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
+delete /dev/dev.o
 /bin/a68k -ii: /dev/dev.asm   ; main source of exec device
+delete /rdwt/rdwt.o
 /bin/a68k -ii: /rdwt/rdwt.asm ; read/write routines of device
+delete /debug/debug-wrapper.o
 /bin/a68k -ii: /debug/debug-wrapper.asm   ; debug routine
+delete /dev/bootstrap.o
 /bin/a68k -ii: /dev/bootstrap.asm   ; main source of boot device
 
 
@@ -14,3 +18,5 @@ assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
 assign IDE_BASE_ADDRESS: remove
 assign i: remove
 
+
+
