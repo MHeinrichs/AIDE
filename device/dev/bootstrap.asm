@@ -59,7 +59,7 @@
    XREF ResetIDE
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 		ENDC
 		
 		IFND	BIND_MEM
@@ -78,7 +78,7 @@ romtag:
    dc.b    RTW_COLDSTART
    dc.b    BD_VERSION
    dc.b    NT_DEVICE
-   dc.b    5
+   dc.b    MYPROCPRI+1
    dc.l    bootname
    dc.l    bootid
    dc.l    initRoutine
@@ -135,7 +135,7 @@ initRoutine:
    bsr addmem
    ENDC
    move.l  ABSEXECBASE,a6
-   ;bsr ResetIDE
+   bsr ResetIDE
    ;get structure for a mem-pointer-package
    move.l  #MyMemPkt_Sizeof,d0
    move.l  #MEMF_ANY+MEMF_CLEAR,d1
@@ -315,6 +315,7 @@ copy_param_packet:
    ;restore buffers
    move.l buffermem(a5),a0 
    move.l parametermem(a5),a3
+   move.l #MEMF_ANY,pp_BufferMemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
    IFGE	DEBUG_DETAIL-2
    bsr print_param_packet  
    ENDC
@@ -537,7 +538,7 @@ end_of_string_found
    move.l  expansionlib(a5),a6
 patch_dosname_again:
    lea     eb_MountList(a6),a0 ;find the BootNode entries
-   tst.l   a0
+   cmp.l   #0,a0 ;lea does NOT change the status bits!
    beq     end_patch_dosname ; list empty!
    bsr     FindSameName      
    ;PRINTF  1,<'FindSameName resulted in %ld',13,10>,d0

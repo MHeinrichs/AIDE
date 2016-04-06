@@ -1,5 +1,5 @@
 MYPROCSTACKSIZE   EQU   $1800
-MYPROCPRI   EQU   5
+MYPROCPRI   EQU   10
 
 
    DEVINIT
@@ -40,16 +40,15 @@ MD_NUMUNITS EQU   $2
    ULONG    md_Unit1adr ;this one must be directly after Unit0adr because it will be set by an offset!
    ULONG    md_Unit0sigbit
    ULONG    md_Unit1sigbit
-   ULONG    md_act_Drive
    UBYTE    md_Flags
-   UBYTE    md_pad
+   UBYTE    md_pad,3
    STRUCT   md_Units,MD_NUMUNITS*4
    STRUCT   md_tcb,TC_SIZE             ; TCB for disk task
    STRUCT   md_stack,MYPROCSTACKSIZE
    LABEL    MyDev_Sizeof
 
     STRUCTURE MyDevUnit,UNIT_SIZE
-   STRUCT   mdu_PortSpacer,48   ;spacer for messageportstructure (is only 32byte, but who knows!)
+   STRUCT   mdu_PortSpacer,48   ;spacer for messageportstructure (is only 34byte, but who knows!)
    APTR     mdu_Device
    ULONG    mdu_UnitNum
    ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
@@ -79,7 +78,7 @@ MD_NUMUNITS EQU   $2
    UBYTE    mdu_actSectorCount	 ;actual number of sectors per transfer block   
    UBYTE    mdu_act_Flags        ;actual SCSI-Packet Flags
    UBYTE    mdu_act_Status			 ;actual SCSI-Status
-   UBYTE    mdu_pad1
+   UBYTE    mdu_pad
    LABEL    MyDevUnit_Sizeof
 
 ;drive types
@@ -104,11 +103,11 @@ MYDEVNAME   MACRO
       ENDM
 
 IDSTRINGMACRO macro
-      dc.b    "IDE.Device 2.26 (30.03.2016)",13,10,0
+      dc.b    "IDE.Device 2.27 (06.04.2016)",13,10,0
       ENDM
 
 VERSION equ 2
-REVISION equ 26
+REVISION equ 27
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

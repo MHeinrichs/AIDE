@@ -45,6 +45,15 @@ LOOPPAUSE  equ   512      ; value for pause loop
 LOOP  equ   256000      ; timeout value for ATA - motor is on
 LOOP2 equ   2560000     ; timeout value for ATA - motor is off
 LOOP3 equ   256000       ; timeout value for ATAPI
+TESTBYTE1 equ $B0
+TESTBYTE2 equ $0B
+TESTBYTE3 equ $51
+TIMEOUT   equ $4
+;some of the 32-bit longword error codes rdwt.asm returns:
+BADLENGTH   equ "PELI"
+BADUNIT     equ "MELA"
+BADOFFSET   equ "TISI"
+NOREADWRITE equ "PILU"
 
 WAITNOTDRQ macro
    move.l   #LOOP,\2

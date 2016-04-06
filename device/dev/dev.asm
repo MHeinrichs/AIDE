@@ -1035,13 +1035,13 @@ Proc_MainLoop:
    CALLSYS  Wait
    move.l   d0,-(sp)
    and.l    md_Unit0mask(a5),d0
-   beq      pb3
+   beq.s    pb3
    move.l   md_Unit0adr(a5),a3
    bsr      Proc_CheckStatus
 pb3
    move.l   (sp)+,d0
    and.l    md_Unit1mask(a5),d0
-   beq      Proc_MainLoop
+   beq.s    Proc_MainLoop
    move.l   md_Unit1adr(a5),a3
    bsr      Proc_CheckStatus
    bra      Proc_MainLoop
@@ -1050,17 +1050,17 @@ pb3
 Proc_CheckStatus:
    ;------ is unit initialized?
    cmp.l    #0,a3
-   bne      pcs1
+   bne.s    pcs1
    rts
 pcs1
    ;------ see if we are stopped
    btst     #MDUB_STOPPED,UNIT_FLAGS(a3)
-   beq      pcs2
+   beq.s    pcs2
    rts                                    ;device is stopped
 pcs2
    ;------ lock the device
    bset     #UNITB_ACTIVE,UNIT_FLAGS(a3)
-   beq      Proc_NextMessage
+   beq.s    Proc_NextMessage
    rts                                    ;device in use
    ;------ get the next request
 Proc_NextMessage:

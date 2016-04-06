@@ -6,14 +6,16 @@ delete /dev/dev.o
 /bin/a68k -ii: /dev/dev.asm   ; main source of exec device
 delete /rdwt/rdwt.o
 /bin/a68k -ii: /rdwt/rdwt.asm ; read/write routines of device
+delete /rdwt/init.o
+/bin/a68k -ii: /rdwt/init.asm ; init routines of device
 delete /debug/debug-wrapper.o
 /bin/a68k -ii: /debug/debug-wrapper.asm   ; debug routine
 delete /dev/bootstrap.o
 /bin/a68k -ii: /dev/bootstrap.asm   ; main source of boot device
 
 
-/bin/dlink -o ide.device /dev/dev.o  /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
-/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib 
+/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
+/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib 
 
 assign IDE_BASE_ADDRESS: remove
 assign i: remove
