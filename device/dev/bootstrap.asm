@@ -419,6 +419,13 @@ end_dealloc:
 
 open_device:
 ;   movem.l d1/a1/a6,-(SP)
+;   move.l  iohandler(a5),a1
+;   moveq #0,d0
+;clear_iohandler_loop:   
+;   move.l	#0,(a0)+
+;   addq.w #4,d0
+;   cmp.w  #IOSTD_SIZE,d0
+;   blt    clear_iohandler_loop
 ;   ;device in a6
 ;   move.l residentstructure(a5),a6
 ;   ;unitnum in d0
@@ -499,12 +506,12 @@ open_error_end:
 
 close_device
 ;   movem.l a1/a6,-(SP)
-;   ;devic in a6
-;   move.l reidentstructure(a5),a6
+;   ;device in a6
+;   move.l residentstructure(a5),a6
 ;   ;ihandler in a1
-;   mov.l  iohandler(a5),a1
+;   move.l  iohandler(a5),a1
 ;   CALLLIB LIB_CLOSE
-;  ;PRINTF 1,<'Close r;etuned %lx',13,10>,D0
+;  ;PRINTF 1,<'Close retuned %lx',13,10>,D0
 ;   movem.l (SP)+,a1/a6
 ;   rts
    movem.l d0/a1/a6,-(SP)
