@@ -23,11 +23,10 @@
    ;outside of this assembly source file, eg. in compilation scripts.
    ;These are AmigaDos "links" to some certain file.
    include "/lib/asmsupp.i";Various helper macros made by Commodore
-   INCLUDE "IDE_BASE_ADDRESS.i"
    include "/lib/mydev.i"  ;select name etc, of the device
    ;include "/lib/myscsi.i" ;
    include "/lib/ata.i"    ;ATA commands and other ATA codes
-   ;include "/lib/atid.i"   ;This include has the macros which
+   include "/lib/atid.i"   ;This include has the macros which
          ;are used to access a particular
          ;implementation of an Amiga to ATA 
          ;hardware interface, such as an A500 
@@ -55,18 +54,17 @@
    XLIB AllocConfigDev
    XLIB AddConfigDev
    XREF ATARdWt
+   XREF FindDrive
    XREF InitDrive
    XREF ResetIDE
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 		
 		IFND	BIND_MEM
 BIND_MEM	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
-TRUE  equ   1
-FALSE equ   0
 
    moveq  #-1,d0 
    rts          ;Return in case this code was called as a program
@@ -240,6 +238,14 @@ check_unit:
 	 ;now open the device!
    move.l  unitnum(a5),d0
 	 PRINTF 1,<'Opening unit %lx',13,10>,d0
+   cmp.l #0,d0 ; is it unit 0?
+   beq find_the_drive
+   cmp.l #10,d0 ;is it unit 10?
+   bne  next_unit
+   move.l #1,d0
+find_the_drive:   
+	 bsr FindDrive ;find if there is at least one drive on the bus and check if ready (spin up for HDD)
+	 bne next_unit
 	 bsr open_device
    ;check result
    cmp.b  #IOERR_OPENFAIL,D0   
@@ -301,9 +307,6 @@ found_partition
    lea		bootdevicename,a1
    move.l	a1,pp_execName(a3)
    move.l unitnum(a5),d1
-   beq    unit_num_correct
-   move.l #10,d1
-unit_num_correct:   
    move.l	d1,pp_unitNumber(a3)
    move.l	pb_Flags(a0),pp_flags(a3)
    lea.l	pb_Environment(a0),a0    ; start of origin
@@ -351,9 +354,9 @@ preparenextpartition:
    bne    prepare_partition
 next_unit:   
    bsr    close_device
-   cmp.l  #1,unitnum(a5)
+   cmp.l  #10,unitnum(a5)
    beq    close_and_dealloc
-   move.l #1,unitnum(a5)
+   move.l #10,unitnum(a5)
    bra    check_unit
 
 close_and_dealloc:
@@ -463,6 +466,9 @@ unit_allready_there:
    move.l   #0,mdu_change_cnt(a3)
    move.l   #FALSE,mdu_no_disk(a3)
    move.l   unitnum(a5),d0
+   beq      unit_default_init_0
+   move.l   #1,d0
+unit_default_init_0:
    move.l   d0,mdu_UnitNum(a3)
    bsr      InitDrive 
    move.w   mdu_drv_type(a3),d0

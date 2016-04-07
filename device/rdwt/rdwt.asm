@@ -45,9 +45,6 @@
    XLIB AllocMem  
    XLIB FreeMem
 
-TRUE  equ   1
-FALSE equ   0
-
 		IFND	DEBUG_DETAIL
 DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
@@ -65,9 +62,9 @@ ATARdWt:
    move.l   d0,d3			  ;save length to somewhere save
    bsr      SelectDrive
    bne.s    errcode
-   move.l   #BADUNIT,d0       ;Check that unit is 0 or 1
-   cmp.l    #1,d2		     
-   bgt.s    Quits
+   ;move.l   #BADUNIT,d0       ;Check that unit is 0 or 1
+   ;cmp.l    #1,d2		     
+   ;bgt.s    Quits   move.l   #BADLENGTH,d0     ;Check if length is multiple of 512
    move.l   #BADLENGTH,d0     ;Check if length is multiple of 512
    move.l   d3,d4
    and.l    #$1ff,d4
@@ -184,11 +181,11 @@ issueCHSread
 issueLBAread
    move.l   d6,d0                      ;restore d0   
    WATABYTE d4,TF_SECTOR_COUNT
-   WATABYTE d0,TF_SECTOR_NUMBER        ;lba bits 0..7
+   WATABYTE d0,TF_LBA_LOW_BYTE        ;lba bits 0..7
    lsr.l    #8,d0
-   WATABYTE d0,TF_CYLINDER_LOW         ;lba bits 8..15
+   WATABYTE d0,TF_LBA_MID_BYTE         ;lba bits 8..15
    lsr.l    #8,d0
-   WATABYTE d0,TF_CYLINDER_HIGH        ;lba bits 16..23
+   WATABYTE d0,TF_LBA_HIGH_BYTE        ;lba bits 16..23
    move.l   mdu_UnitNum(a3),d2
    lsl.b    #4,d2
    add.b    #L,d2
@@ -254,14 +251,13 @@ issueCHSwrite
    bra.s    sendwritecommand
 
 issueLBAwrite
-   move.l   mdu_UnitNum(a3),d2
    move.l   d6,d0                      ;restore d0
    WATABYTE d4,TF_SECTOR_COUNT
-   WATABYTE d0,TF_SECTOR_NUMBER        ;LBA  bits  0..7
+   WATABYTE d0,TF_LBA_LOW_BYTE        ;LBA  bits  0..7
    lsr.l    #8,d0
-   WATABYTE d0,TF_CYLINDER_LOW         ;LBA  bits  8..15
+   WATABYTE d0,TF_LBA_MID_BYTE         ;LBA  bits  8..15
    lsr.l    #8,d0
-   WATABYTE d0,TF_CYLINDER_HIGH        ;LBA  bits  16..23
+   WATABYTE d0,TF_LBA_HIGH_BYTE        ;LBA  bits  16..23
    move.l   mdu_UnitNum(a3),d2
    lsl.b    #4,d2
    add.b    #L,d2
@@ -493,7 +489,7 @@ Packet
    lsl.b    #4,d2
    or.b     #$a0,d2
    WATABYTE d2,TF_DRIVE_HEAD           ;set task file registers
-   DLY400NS
+   ;DLY400NS
    WATABYTE #0,TF_SECTOR_COUNT
    WATABYTE d1,TF_CYLINDER_LOW
    lsr.w    #8,d1

@@ -14,8 +14,11 @@ TF_ERROR       equ      (Y+TF+$1*REG_INC+CS0)
 TF_FEATURES    equ      (Y+TF+$1*REG_INC+CS0)
 TF_SECTOR_COUNT   equ   (Y+TF+$2*REG_INC+CS0)
 TF_SECTOR_NUMBER  equ   (Y+TF+$3*REG_INC+CS0)
+TF_LBA_LOW_BYTE   equ   TF_SECTOR_NUMBER
 TF_CYLINDER_LOW   equ   (Y+TF+$4*REG_INC+CS0)
+TF_LBA_MID_BYTE   equ   TF_CYLINDER_LOW
 TF_CYLINDER_HIGH  equ   (Y+TF+$5*REG_INC+CS0)
+TF_LBA_HIGH_BYTE   equ   TF_CYLINDER_HIGH
 TF_DRIVE_HEAD     equ   (Y+TF+$6*REG_INC+CS0)
 TF_STATUS         equ   (Y+TF+$7*REG_INC+CS0)
 TF_COMMAND        equ   (Y+TF+$7*REG_INC+CS0)
@@ -48,12 +51,14 @@ LOOP3 equ   256000       ; timeout value for ATAPI
 TESTBYTE1 equ $B0
 TESTBYTE2 equ $0B
 TESTBYTE3 equ $51
-TIMEOUT   equ $4
+TIMEOUT   equ $15
 ;some of the 32-bit longword error codes rdwt.asm returns:
 BADLENGTH   equ "PELI"
 BADUNIT     equ "MELA"
 BADOFFSET   equ "TISI"
 NOREADWRITE equ "PILU"
+TRUE  equ   1
+FALSE equ   0
 
 WAITNOTDRQ macro
    move.l   #LOOP,\2

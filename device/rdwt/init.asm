@@ -22,12 +22,9 @@
    XLIB FreeMem
    XREF waitreadytoacceptnewcommand
    XREF SelectDrive
-TRUE  equ   1
-FALSE equ   0
-
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called
@@ -39,11 +36,13 @@ DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
    PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
    movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
-;get memory
-   moveq   #0,d4
-   ;bsr      FindDrive	
    bsr      SelectDrive
 	 bne			wfc1														 ;no drive present!
+   move.l   mdu_UnitNum(a3),d0
+   ;bsr      FindDrive	
+	 ;bne			wfc1														 ;no drive present!
+;get memory
+   moveq    #0,d4 ;d4 holds the buffer for now on
    move.l   ABSEXECBASE,a0
    move.l   #512,d0       ; we want 512 bytes for a buffer   
    move.l   #MEMF_ANY!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
@@ -275,63 +274,56 @@ kr21:
 ; if it is busy or not ready it might be there: wait 5 seconds for the drive to get ready
 ; if it is busy and nor ready it is a empty bus->no HW
 ; if it is neither busy nor "nort ready" we have to read/write some registers to check if it is there
-
+;d0 holdt the unit number
+   Public FindDrive
 FindDrive
-   movem.l  d1,-(sp)	 
-   move.l   mdu_UnitNum(a3),d0
+   movem.l  d1/d2,-(sp)	 
    PRINTF 1,<'Searching for drive %ld',13,10>,d0
    lsl.b    #4,d0
    or.b     #$a0,d0
    WATABYTE d0,TF_DRIVE_HEAD            ; select the drive
    move.l   #TIMEOUT,d1                 ; wait timeout*sec 
-ckeck_status:
-   WATABYTE #TESTBYTE1,TF_SECTOR_NUMBER ; write first testbyte
+check_status:
+   WATABYTE #TESTBYTE1,TF_SECTOR_COUNT ; write first testbyte
    RATABYTE	TF_ALTERNATE_STATUS,d0                ; get status
-   PRINTF 1,<'Status is %lx',13,10>,d0
-   cmp.b    #BSY+DRDY,d0
-   bgt      bad_return_from_find        ;more than bsy and rdy set?!?->bad stuff
    and.b    #BSY+DRDY,d0                ; eval Busy and DRDY  
    beq      test_registers              ; none: test registers
    cmp.b    #BSY+DRDY,d0                ; both: impossible
    beq      bad_return_from_find
-   and.b    #BSY,d1
+   and.b    #BSY,d0
    beq      test_registers              ;Not busy->test registers
+   PRINTF 1,<'Waiting to respond %ld sec',13,10>,d1
    ;bad busy wait
    move.l   #500000,d0	    
-   PRINTF 1,<'Wait %ld secs',13,10>,d1
 wait_loop:
    tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
    dbra     d0,wait_loop
-   dbra     d1,ckeck_status             ; check again
+   dbra     d1,check_status             ; check again
    bra      bad_return_from_find        ; timeout reached: not drive here   
 test_registers:
-   PRINTF 1,<'Testing registers',13,10>
    ; Write some Registers and read thew value back
-   WATABYTE #TESTBYTE1,TF_SECTOR_NUMBER
-	 RATABYTE	TF_SECTOR_NUMBER,d0
+   WATABYTE #TESTBYTE1,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
 	 cmp.b	#TESTBYTE1,d0
    bne  	bad_return_from_find
-   PRINTF 1,<'Test 1 pass: %lx',13,10>,d0
-   WATABYTE #TESTBYTE2,TF_SECTOR_NUMBER
-	 RATABYTE	TF_SECTOR_NUMBER,d0
+   WATABYTE #TESTBYTE2,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
 	 cmp.b	#TESTBYTE2,d0
    bne  	bad_return_from_find
-   PRINTF 1,<'Test 2 pass: %lx',13,10>,d0
-   WATABYTE #TESTBYTE3,TF_SECTOR_NUMBER
-	 RATABYTE	TF_SECTOR_NUMBER,d0
+   WATABYTE #TESTBYTE3,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
 	 cmp.b	#TESTBYTE3,d0
    bne  	bad_return_from_find
-   PRINTF 1,<'Test 3 pass: %lx',13,10>,d0
    ; we found a drive!
 good_return_from_find:
-   PRINTF 1,<'I found a drive :)!',13,10>
-   moveq    #0,d0   
+   PRINTF 1,<'Found it!',13,10>
+   move.l   #0,d0   
    bra.s    return_from_find
 bad_return_from_find:
-   PRINTF 1,<'I did not found a drive :(!',13,10>
-   moveq    #-1,d0   
+   PRINTF 1,<'Found it not!',13,10>
+   move.l   #-1,d0   
 return_from_find:
-   movem.l  (sp)+,d1
+   movem.l  (sp)+,d1/d2
    rts
 
    cnop  0,4

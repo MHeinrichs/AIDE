@@ -96,6 +96,8 @@ LBA48_ACCESS equ 2
    ;------ state bit for unit stopped
    BITDEF   MDU,STOPPED,2
 
+MYPRI   EQU   5
+
 ;NAMES etc.
 
 MYDEVNAME   MACRO
