@@ -84,19 +84,13 @@
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
 _intena  equ   $dff09a ;;;ML
 
-TRUE  equ   1
-FALSE equ   0
-
 		IFND	DEBUG_DETAIL
 DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
-
-
 FirstAddress:
    moveq  #-1,d0 
    rts          ;Return in case this code was called as a program
-MYPRI   EQU   10
 
 ;ROM-Tag 
 initDDescrip:
@@ -224,7 +218,7 @@ opn1
    bne      Open_Error              ;unit number is out of range
    ;------ see if the unit is already initialized
    move.l   d0,d2                   ; save unit number
-   lsl.l    #2,d0
+   lsl.l    #2,d0                   ; convert 1->4
    lea.l    md_Units(a6,d0.l),a4
    move.l   (a4),d0
    bne.s    Open_UnitOK
@@ -378,6 +372,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
    ;------ save unit pointer and set unit signal bit   
    cmp.l    #1,d2
    beq      init_unit_1
+init_unit_0
    move.l   a3,md_Unit0adr(a6)
    move.l   md_Unit0sigbit(a6),d0
    move.b   d0,MP_SIGBIT(a3)
@@ -439,7 +434,7 @@ set_default_values:
 
    ;------ mark us as ready to go
    move.l   d2,d0                   ;unit number
-   lsl.l    #2,d0
+   lsl.l    #2,d0                   ,1->4
 
    move.l   a3,md_Units(a6,d0.l)    ;set unit table
 
@@ -477,7 +472,7 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
 ;  lea      md_Unit0mask(a6),a1
 ;  clr.l    0(a1,d2.w)           ;clear signal mask for unit
 ;  clr.l    8(a1,d2.w)           ;clear unit pointer
-;  lsr.l    #2,d2
+;  lsl.l    #2,d2
    
    ;------ free the unit structure.
 
@@ -591,7 +586,7 @@ BeginIO_NoCmd:
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
    move.l   a2,-(sp)
    move.l   a1,a2
-  move.l   mdu_UnitNum(a3),d0 ;XXXXXX d0 next 2.nd line!!
+;  move.l   mdu_UnitNum(a3),d0 ;XXXXXX d0 next 2.nd line!!
    clr.b    IO_ERROR(a2)         ;No error so far
    move.w   IO_COMMAND(a2),d0
    lsl      #2,d0                ;Multiply by 4 to get table offset
