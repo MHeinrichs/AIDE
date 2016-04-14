@@ -16,11 +16,6 @@
 	xdef READOPE
 	xdef WRITEOPE
 
-	xref  _LVOAllocSignal		;external references
-	xref  _LVOSignal			  ;these will be linked from amiga.lib
-	xref  _LVOWait
-	xref  _LVOFindTask
-
 	include "exec/io.i"
 	include "exec/types.i"
 	include "exec/lists.i"
@@ -60,15 +55,15 @@ ATARdWt:
 	;d2 unit number
 	movem.l	d1-d7/a0-a6,-(sp)
 	move.l	d0,d3			  ;save length to somewhere save
-	bsr			SelectDrive
-	bne.s		errcode
+	;bsr			SelectDrive
+	;bne.s		errcode
 	;move.l	#BADUNIT,d0		 ;Check that unit is 0 or 1
 	;cmp.l	 #1,d2			  
 	;bgt.s	 Quits	move.l	#BADLENGTH,d0	  ;Check if length is multiple of 512
-	move.l	#BADLENGTH,d0	  ;Check if length is multiple of 512
-	move.l	d3,d4
-	and.l		#$1ff,d4
-	bne.s		Quits
+	;move.l	#BADLENGTH,d0	  ;Check if length is multiple of 512
+	;move.l	d3,d4
+	;and.l		#$1ff,d4
+	;bne.s		Quits
 	move.l	#BADLENGTH,d0	  ;No sectors ?
 	lsr.l		#8,d3				 ;Divide by 512 to get
 	lsr.l		#1,d3				 ;Number of sectors	
@@ -356,6 +351,8 @@ rstwait2:
 	dbne		d0,rstwait2
 	movem.l  (sp)+,d0
   rts
+  Public ATARdWtLen
+ATARdWtLen = *-ATARdWt
 	
 
 
@@ -377,9 +374,10 @@ SelectDrive:
 sdr4
 	move.l	#0,d0					 ; clear zero flag
 	rts	
+
+
 ; a0 = scsi_Data, d0 = scsi_Length, a2 = scsi_Command, a6 = SCSICmd
 ; d2 = unit number, a3 = io_unit
-
 	Public SCSIDirectCmd
 SCSIDirectCmd
 	movem.l  a0-a6/d0-d6,-(sp)

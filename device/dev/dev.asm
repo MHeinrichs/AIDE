@@ -33,19 +33,20 @@
 	                        ;interface.
 	include "/lib/bootinfo.i"  ;select name etc, of the device
 	include "/debug/debug-wrapper.i"
+	
 	;include "lib/myscsi.i" ;
 
 	;Routines and other values to be linked from "rdwt.asm"
 	XREF  READOPE       ;These two constants are codes for
 	XREF  WRITEOPE      ;the types of operation for IDERdWt
 	XREF  ATARdWt       ;Read/Write routine
+	XREF  ATARdWtLen
 	XREF  InitDrive     ;Drive initialisation routine
 	XREF  SCSIDirectCmd ;SCSI direct command routine
-	XREF  SelectDrive   ;Selects which drive to use (0/1)
 	XREF  blink         ;Routine that blinks the power LED
 	XREF  pause         ;Pause routine
 	XREF  ResetIDE
-
+	
 	XLIB  AddIntServer ;XLIB macro: XLIB Something => XREF _LVOSomething
 	XLIB  RemIntServer 
 	XLIB  Debug
@@ -74,11 +75,13 @@
 	XLIB  Forbid
 	XLIB  Delay
 	XLIB  Alert
-	XLIB FindResident
-	XLIB InitResident
-	XLIB AllocConfigDev
-	XLIB AddConfigDev
-	XLIB AddBootNode
+	XLIB  FindResident
+	XLIB  InitResident
+	XLIB  AllocConfigDev
+	XLIB  AddConfigDev
+	XLIB  AddBootNode
+	XLIB  CacheClearU
+	XLIB  CopyMem
 
 ;The _intena address is the register which can be used to disable or 
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
@@ -171,6 +174,31 @@ initRoutine:
 	;ALERT    AG_OpenLib!AO_DOSLib
 	;bra      init_error
 init1
+  ;find the location of ATARdWt
+  lea    ATARdWt,a0
+  move.l a0,md_ATARdWt(a5)
+  cmp.l  #$600000,a0
+  blt.s  relocate_atardwt
+  cmp.l  #$A00000,a0
+  bgt.s  relocate_atardwt
+  bra.s  end_relocate ;already in the right piece of fastram!
+relocate_atardwt  
+	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+  lea    ATARdWt,a0
+	moveq  #MEMF_PUBLIC,d1
+  CALLSYS AllocMem
+  tst.l  d0
+  beq.s  end_relocate
+  move.l d0,md_ATARdWt(a5)
+  lea    ATARdWt,a0
+	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+  move.l md_ATARdWt(a5),a1
+  CALLSYS CopyMem
+  cmpi.w #37,LIB_VERSION(a6)
+  blt.s end_relocate
+  CALLSYS CacheClearU
+end_relocate:
+
 	;------ Allocate the signal for unit 0
 	moveq    #-1,d0
 	CALLSYS  AllocSignal 
@@ -249,7 +277,7 @@ nav1
 	moveq    #0,d0
 
 Open_End
-	PRINTF 1,<'End ide.device %lx ',13,10>d0
+	PRINTF 1,<'Opend ide.device %lx ',13,10>d0
 	movem.l  (sp)+,d2/a2-a4
 	rts
 Open_Error:
@@ -397,6 +425,7 @@ set_default_values:
 	move.w   #TRUE,mdu_motor(a3)     ;units usually start up with motor on
 	move.l   #0,mdu_change_cnt(a3)
 	move.l   #FALSE,mdu_no_disk(a3)
+	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
 	; new: init the scsi-emulation-packages Inquiry, MSPage3 and MSPage4
 	lea.l    mdu_EmulInquiry(a3),a1
 	move.l   #$00000001,(a1)+
@@ -739,7 +768,12 @@ scsi_r6                             ; Read(6) packet
 	move.w   IO_COMMAND(a1),-(sp)
 	move.w   #CMD_READ,IO_COMMAND(a1)
 	move.l   a1,a2
-	jsr      ATARdWt
+	;jsr      ATARdWt
+	move.l   a1,-(sp)
+	move.l   mdu_ATARdWt(a3),a1
+  jsr      (a1)
+	move.l   (sp)+,a1
+	;jsr      ATARdWt
 	move.w   (sp)+,IO_COMMAND(a1)
 	move.l   (sp)+,scsi_Actual(a6)
 	tst.b    d0
@@ -911,7 +945,7 @@ Format:
 jee32f
 	move.l   #0,d0  ;high offset 0
 drwf
-	movem.l  a2/a6/d2/d5,-(sp)
+	movem.l  a1-a3/a6/d2/d5,-(sp)
 	move.l   a0,a2 ;operation type to A2
 	move.l   d0,d5 ;high bits of offset
 	move.l   IO_UNIT(a1),a3       ; Get unit pointer
@@ -935,7 +969,11 @@ drwf
 
 	move.l   d0,IO_ACTUAL(a1)   ;high offset is allready saved to d5
 	move.l   mdu_UnitNum(a3),d2
-	jsr      ATARdWt
+	;jsr      ATARdWt
+	move.l   a1,-(sp)
+	move.l   mdu_ATARdWt(a3),a1
+  jsr      (a1)
+	move.l   (sp)+,a1
 	move.w   #TRUE,mdu_motor(a3)  ; Motor will turn on
 RdWt_Clean:
 	move.b   d0,IO_ERROR(a1)
@@ -944,7 +982,7 @@ Sec_Error:
 	move.b   #IOERR_NOCMD,IO_ERROR(a1)
 RdWt_end:
 	bsr      TermIO
-	movem.l  (sp)+,a2/a6/d2/d5
+	movem.l  (sp)+,a1-a3/a6/d2/d5
 	rts
 
 Update:
