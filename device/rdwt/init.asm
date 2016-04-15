@@ -24,7 +24,7 @@
 	XREF SelectDrive
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 		ENDC
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called
@@ -36,6 +36,7 @@ DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 	PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
 	movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
+  PRINTF 1,<'Init drive routine',13,10>
 	bsr      SelectDrive
 	 bne			wfc1														 ;no drive present!
 	move.l   mdu_UnitNum(a3),d0
@@ -111,6 +112,8 @@ satadrv
 atadrv
 	move.w   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 kr3
+	WAITDRQ	D1,D2
+	beq      wfc1
 	move.l   d4,a5                  ;get identify data
 	move.l	#127,d0
 	move.l   #TF_DATA,a0
@@ -264,6 +267,8 @@ kr2
 	LINKSYS FreeMem,a0
 	
 kr21:
+  PRINTF 1,<'Init drive routine ended',13,10>
+
 	move.l   #0,d4
 	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a5
 	rts

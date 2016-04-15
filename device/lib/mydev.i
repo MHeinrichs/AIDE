@@ -1,5 +1,5 @@
-MYPROCSTACKSIZE   EQU   $1800
-MYPROCPRI   EQU   10
+MYPROCSTACKSIZE   EQU   $200
+MYPROCPRI   EQU   5
 
 
 	DEVINIT
@@ -34,22 +34,16 @@ MD_NUMUNITS EQU   $2
 	ULONG    md_DosLib
 	ULONG    md_SegList
 	ULONG    md_Base      ; Base address of this device's expansion board
-	ULONG    md_Unit0mask
-	ULONG    md_Unit1mask
-	ULONG    md_Unit0adr
-	ULONG    md_Unit1adr ;this one must be directly after Unit0adr because it will be set by an offset!
-	ULONG    md_Unit0sigbit
-	ULONG    md_Unit1sigbit
 	ULONG    md_ATARdWt
 	UBYTE    md_Flags
 	UBYTE    md_pad,3
 	STRUCT   md_Units,MD_NUMUNITS*4
-	STRUCT   md_tcb,TC_SIZE             ; TCB for disk task
-	STRUCT   md_stack,MYPROCSTACKSIZE
 	LABEL    MyDev_Sizeof
 
-	 STRUCTURE MyDevUnit,UNIT_SIZE
-	STRUCT   mdu_PortSpacer,48   ;spacer for messageportstructure (is only 34byte, but who knows!)
+	 STRUCTURE MyDevUnit,UNIT_SIZE ;34 byte-> 2 byte missing for lon
+	UBYTE    mdu_SigBit           ;Signal bit allocated for interrupts
+	UBYTE    mdu_SectorBuffer	 ;max number of sectors per transfer block
+	;long alligned  
 	APTR     mdu_Device
 	ULONG    mdu_UnitNum
 	ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
@@ -74,13 +68,16 @@ MD_NUMUNITS EQU   $2
 	UWORD    mdu_auto             ;get drive parameters automatic? = TRUE
 	UWORD    mdu_lba              ;use LBA? For ATAPI always TRUE
 	UWORD    mdu_motor            ;motor status
-	UBYTE    mdu_SigBit           ;Signal bit allocated for interrupts
-	UBYTE    mdu_SectorBuffer	 ;max number of sectors per transfer block
+	;odd word allign
 	UBYTE    mdu_actSectorCount	 ;actual number of sectors per transfer block   
 	UBYTE    mdu_act_Flags        ;actual SCSI-Packet Flags
+	;Long align
 	UBYTE    mdu_act_Status			 ;actual SCSI-Status
-	UBYTE    mdu_pad
+	UBYTE    mdu_pad,3
+	;Long align
 	ULONG    mdu_ATARdWt          ;Relocation of ATARdWt routine
+	STRUCT   mdu_stack,MYPROCSTACKSIZE
+	STRUCT   mdu_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
 	LABEL    MyDevUnit_Sizeof
 
 ;drive types
@@ -105,6 +102,15 @@ MYPRI   EQU   5
 MYDEVNAME   MACRO
 	   DC.B   'ide.device',0
 	   ENDM
+
+MYTASKNAME   MACRO
+	   DC.B   'ide0.device',0
+	   ENDM
+
+MYTASKNAME2   MACRO
+	   DC.B   'ide1.device',0
+	   ENDM
+
 
 IDSTRINGMACRO macro
 	   dc.b    "IDE.Device 2.28 (06.04.2016)",13,10,0
