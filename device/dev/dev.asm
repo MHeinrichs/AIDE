@@ -88,7 +88,7 @@
 _intena  equ   $dff09a ;;;ML
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 FirstAddress:
@@ -273,7 +273,8 @@ Open_UnitOK:
 	cmp.w    #TRUE,mdu_firstcall(a3)
 	bne      nav1
 	bsr      InitDrive ;Call the IDE drive initialisation routine
-  PRINTF 1,<'Init drive ok',13,10>
+	move.w   mdu_drv_type(a3),d0  ;known drive type
+  PRINTF 1,<'Init drive ok, drivetype: %ld',13,10>,d0
 	move.w   #FALSE,mdu_firstcall(a3)
 nav1
 	cmp.w    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type

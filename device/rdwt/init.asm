@@ -24,7 +24,7 @@
 	XREF SelectDrive
 
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called
@@ -36,9 +36,10 @@ DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 	PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
 	movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
-  PRINTF 1,<'Init drive routine',13,10>
+	move.l   mdu_UnitNum(a3),d0
+  PRINTF 1,<'Init drive routine drive: %ld',13,10>,d0
 	bsr      SelectDrive
-	 bne			wfc1														 ;no drive present!
+	bne			wfc1a														 ;no drive present!
 	move.l   mdu_UnitNum(a3),d0
 	;bsr      FindDrive	
 	 ;bne			wfc1														 ;no drive present!
@@ -58,7 +59,9 @@ InitDrive   ;a3 = unitptr
 	move.w   #CHS_ACCESS,mdu_lba(a3)               ;presumption
 	WATABYTE #ATA_IDENTIFY_DRIVE,TF_COMMAND   ;get drive data
 	WAITNOTBSY D1,D2
-	beq      wfc1
+	beq      wfc1b
+	moveq    #0,d0
+	moveq    #0,d1
 	RATABYTE TF_STATUS,d0
 	;some atapi drives do NOT aboard this command: just read the CYLH/L Values
 	;and.b    #ERR,d0                          ;atapi drive aborts this command
@@ -85,9 +88,40 @@ drive_test_ata_atapi
 drive_test_ata_satapi
 	;check satapi: d0=$96 and d1=$69
 	cmp.b 	#$96,d0
-	bne		wfc1			   				 	 ;unknown
+	bne		seagate_error_drive_id ;unknown
 	cmp.b	#$69,d1 							 ;found an atapi-drive
 	beq		satapi
+seagate_error_drive_id         ; some seagate report  1F/25 here ?!?!
+	cmp.b 	#$1F,d0
+	bne		wfc1c			   				 	 ;unknown
+	cmp.b	#$25,d1 							 ;found an ata-drive
+	beq		atadrv
+	bra		wfc1c	
+wfc1a
+	IFGE	DEBUG_DETAIL-2	
+	PRINTF 1,<'SelectDrive failed!',13,10>
+	bra    wfc1
+	ENDC
+wfc1b
+	IFGE	DEBUG_DETAIL-2	
+PRINTF 1,<'ATA_IDENTIFY_DRIVE failed!',13,10>
+	bra    wfc1
+	ENDC
+wfc1c
+	IFGE	DEBUG_DETAIL-2	
+	PRINTF 1,<'Unknown drive type %ld %ld!',13,10>,d0,d1
+	bra    wfc1
+	endC
+wfc1d
+	IFGE	DEBUG_DETAIL-2	
+	PRINTF 1,<'IDENTIFY_PACKET_DEVICE failed!',13,10>
+	bra    wfc1
+	ENDC
+wfc1e
+	IFGE	DEBUG_DETAIL-2	
+	PRINTF 1,<'Got no DRDY from IDENTIFY_xx!',13,10>
+	bra    wfc1	
+	ENDC
 wfc1
 	move.w   #UNKNOWN_DRV,mdu_drv_type(a3)
 	bra      kr2
@@ -99,7 +133,7 @@ atapi
 wfc2
 	WATABYTE #IDENTIFY_PACKET_DEVICE,TF_COMMAND  ;get atapi drive data
 	WAITDRQ  D1,D2
-	beq      wfc1
+	beq      wfc1d
 	RATABYTE TF_STATUS,d0               ;clear interrupt line
 	move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
 	clr.l    mdu_sectors_per_track(a3)
@@ -113,7 +147,7 @@ atadrv
 	move.w   #ATA_DRV,mdu_drv_type(a3)  ;ata drive
 kr3
 	WAITDRQ	D1,D2
-	beq      wfc1
+	beq      wfc1e
 	move.l   d4,a5                  ;get identify data
 	move.l	#127,d0
 	move.l   #TF_DATA,a0
