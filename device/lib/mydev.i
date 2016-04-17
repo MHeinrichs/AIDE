@@ -1,6 +1,10 @@
-MYPROCSTACKSIZE   EQU   $200
+MYPROCSTACKSIZE   EQU   $1000
 MYPROCPRI   EQU   5
 
+	include "/debug/debug-wrapper.i"
+		IFND	DEBUG_DETAIL
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+		ENDC
 
 	DEVINIT
 	DEVCMD   CMD_MOTOR    ; control the disk's motor (NO-OP)
@@ -35,9 +39,9 @@ MD_NUMUNITS EQU   $2
 	ULONG    md_SegList
 	ULONG    md_Base      ; Base address of this device's expansion board
 	ULONG    md_ATARdWt
+	STRUCT   md_Units,MD_NUMUNITS*4
 	UBYTE    md_Flags
 	UBYTE    md_pad,3
-	STRUCT   md_Units,MD_NUMUNITS*4
 	LABEL    MyDev_Sizeof
 
 	 STRUCTURE MyDevUnit,UNIT_SIZE ;34 byte-> 2 byte missing for lon

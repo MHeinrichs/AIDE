@@ -36,13 +36,9 @@
 	 include "/lib/ata.i"	 ; defines ATA bits and commands
 	
 	include "/lib/asmsupp.i"; Various helpers from Commodore
-	include "/debug/debug-wrapper.i"
 	XLIB AllocMem  
 	XLIB FreeMem
 
-		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
-		ENDC
 
 	Public	ATARdWt
 ATARdWt:

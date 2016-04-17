@@ -16,16 +16,12 @@
 	                        ;interface.
 	include "/lib/ata.i"    ; defines ATA bits and commands
 	include "/lib/asmsupp.i"; Various helpers from Commodore
-	include "/debug/debug-wrapper.i"
 	
 	XLIB AllocMem
 	XLIB FreeMem
 	XREF waitreadytoacceptnewcommand
 	XREF SelectDrive
 
-		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
-		ENDC
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called
 ;That might happen in dev.asm.
@@ -35,9 +31,11 @@ DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 
 	PUBLIC   InitDrive
 InitDrive   ;a3 = unitptr
-	movem.l  d1/d2/d3/d4/a0/a1/a5,-(sp)	 
+	movem.l  d1/d2/d3/d4/a0/a1/a2/a5,-(sp)	 
+	IFGE	DEBUG_DETAIL-1	
 	move.l   mdu_UnitNum(a3),d0
   PRINTF 1,<'Init drive routine drive: %ld',13,10>,d0
+  ENDC
 	bsr      SelectDrive
 	bne			wfc1a														 ;no drive present!
 	move.l   mdu_UnitNum(a3),d0
@@ -96,29 +94,31 @@ seagate_error_drive_id         ; some seagate report  1F/25 here ?!?!
 	bne		wfc1c			   				 	 ;unknown
 	cmp.b	#$25,d1 							 ;found an ata-drive
 	beq		atadrv
+	IFGE	DEBUG_DETAIL-1	
 	bra		wfc1c	
+	ENDC
 wfc1a
-	IFGE	DEBUG_DETAIL-2	
+	IFGE	DEBUG_DETAIL-1	
 	PRINTF 1,<'SelectDrive failed!',13,10>
 	bra    wfc1
 	ENDC
 wfc1b
-	IFGE	DEBUG_DETAIL-2	
-PRINTF 1,<'ATA_IDENTIFY_DRIVE failed!',13,10>
+	IFGE	DEBUG_DETAIL-1	
+  PRINTF 1,<'ATA_IDENTIFY_DRIVE failed!',13,10>
 	bra    wfc1
 	ENDC
 wfc1c
-	IFGE	DEBUG_DETAIL-2	
+	IFGE	DEBUG_DETAIL-1	
 	PRINTF 1,<'Unknown drive type %ld %ld!',13,10>,d0,d1
 	bra    wfc1
 	endC
 wfc1d
-	IFGE	DEBUG_DETAIL-2	
+	IFGE	DEBUG_DETAIL-1	
 	PRINTF 1,<'IDENTIFY_PACKET_DEVICE failed!',13,10>
 	bra    wfc1
 	ENDC
 wfc1e
-	IFGE	DEBUG_DETAIL-2	
+	IFGE	DEBUG_DETAIL-1	
 	PRINTF 1,<'Got no DRDY from IDENTIFY_xx!',13,10>
 	bra    wfc1	
 	ENDC
@@ -274,6 +274,37 @@ notauto
 	beq      setupata
 	bra		kr2
 setupata
+  ;fill the scsi-inquiery packets
+  lea      mdu_model_num(a3),a2
+	lea      8+mdu_EmulInquiry(a3),a0
+	move.l   (a2)+,(a0)+
+	move.l   (a2)+,(a0)+
+	lea      mdu_ser_num(a3),a2
+	;lea      16+mdu_EmulInquiry(a3),a0
+	move.l   (a2)+,(a0)+
+	move.l   (a2)+,(a0)+
+	move.l   (a2)+,(a0)+
+	move.l   (a2),(a0)
+  ;fill the scsi-ModeSende Packet 3/4 data
+  lea      mdu_EmulMSPage3(a3),a2
+	move.l   mdu_sectors_per_track(a3),d0
+	move.w   d0,14(a2)
+	lea      mdu_EmulMSPage4(a3),a2
+	move.l   mdu_cylinders(a3),d0
+	move.l   d0,d1
+	lsr.l    #8,d0
+	move.w   d0,6(a2)
+	move.w   d0,10(a2)
+	move.w   d0,18(a2)
+	move.b   d1,8(a2)
+	move.b   d1,12(a2)
+	move.b   d1,20(a2)
+	move.w   d1,14(a2)
+	swap     d1
+	move.b   d1,13(a2)
+	move.l   mdu_heads(a3),d0
+	move.b   d0,9(a2)
+
 ;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
 ;   bge			kr2
 	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
@@ -304,65 +335,7 @@ kr21:
   PRINTF 1,<'Init drive routine ended',13,10>
 
 	move.l   #0,d4
-	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a5
-	rts
-
-;This routine finds if a drive is attached:
-; first it issues a write to a register
-; second it reads the status and checks "busy" and "not ready"
-; if it is busy or not ready it might be there: wait 5 seconds for the drive to get ready
-; if it is busy and nor ready it is a empty bus->no HW
-; if it is neither busy nor "nort ready" we have to read/write some registers to check if it is there
-;d0 holdt the unit number
-	Public FindDrive
-FindDrive
-	movem.l  d1/d2,-(sp)	 
-	PRINTF 1,<'Searching for drive %ld',13,10>,d0
-	lsl.b    #4,d0
-	or.b     #$a0,d0
-	WATABYTE d0,TF_DRIVE_HEAD            ; select the drive
-	move.l   #TIMEOUT,d1                 ; wait timeout*sec 
-check_status:
-	WATABYTE #TESTBYTE1,TF_SECTOR_COUNT ; write first testbyte
-	RATABYTE	TF_ALTERNATE_STATUS,d0                ; get status
-	and.b    #BSY+DRDY,d0                ; eval Busy and DRDY  
-	beq      test_registers              ; none: test registers
-	cmp.b    #BSY+DRDY,d0                ; both: impossible
-	beq      bad_return_from_find
-	and.b    #BSY,d0
-	beq      test_registers              ;Not busy->test registers
-	PRINTF 1,<'Waiting to respond %ld sec',13,10>,d1
-	;bad busy wait
-	move.l   #500000,d0	    
-wait_loop:
-	tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
-	dbra     d0,wait_loop
-	dbra     d1,check_status             ; check again
-	bra      bad_return_from_find        ; timeout reached: not drive here   
-test_registers:
-	; Write some Registers and read thew value back
-	WATABYTE #TESTBYTE1,TF_SECTOR_COUNT
-	 RATABYTE	TF_SECTOR_COUNT,d0
-	 cmp.b	#TESTBYTE1,d0
-	bne  	bad_return_from_find
-	WATABYTE #TESTBYTE2,TF_SECTOR_COUNT
-	 RATABYTE	TF_SECTOR_COUNT,d0
-	 cmp.b	#TESTBYTE2,d0
-	bne  	bad_return_from_find
-	WATABYTE #TESTBYTE3,TF_SECTOR_COUNT
-	 RATABYTE	TF_SECTOR_COUNT,d0
-	 cmp.b	#TESTBYTE3,d0
-	bne  	bad_return_from_find
-	; we found a drive!
-good_return_from_find:
-	PRINTF 1,<'Found it!',13,10>
-	move.l   #0,d0   
-	bra.s    return_from_find
-bad_return_from_find:
-	PRINTF 1,<'Found it not!',13,10>
-	move.l   #-1,d0   
-return_from_find:
-	movem.l  (sp)+,d1/d2
+	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a2/a5
 	rts
 
 	cnop  0,4

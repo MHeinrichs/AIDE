@@ -33,7 +33,6 @@
 	      ;side slot interface or a Parallel port
 	      ;interface.
 	include "/lib/bootinfo.i";Structure for boot infos
-	include "/debug/debug-wrapper.i"
 
 	XLIB	AllocMem
 	XLIB	FreeMem
@@ -54,13 +53,8 @@
 	XLIB AllocConfigDev
 	XLIB AddConfigDev
 	XREF ATARdWt
-	XREF FindDrive
 	XREF InitDrive
 	XREF ResetIDE
-
-		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
-		ENDC
 		
 		IFND	BIND_MEM
 BIND_MEM	SET	0	;Detail level of debugging.  Zero for none.
@@ -330,7 +324,7 @@ copy_param_packet:
 	CALLSYS MakeDosNode
 	tst.l   d0
 	beq     close_and_dealloc
-	;PRINTF 1,<'Made DosNode: %lx',13,10>,D0
+	PRINTF 1,<'Made DosNode: %lx',13,10>,D0
 	move.l  d0,devicenode(a5) ; move the device node to mem
 	move.l parametermem(a5),a3 ;first move parampacket to a3 (again?!?)
 	;set d0/d1: priority and startproc
@@ -345,11 +339,11 @@ copy_param_packet:
 	move.l  configdev(a5),a1
 add_node:
 	CALLSYS  AddBootNode	
-	 ;PRINTF 1,<'AddBootNodeResult %lx',13,10>,d0
+	 PRINTF 1,<'AddBootNodeResult %lx',13,10>,d0
 preparenextpartition:
 	move.l buffermem(a5),a0
 	move.l pb_Next(a0),d0
-	;PRINTF 1,<'Next partition in block: %lx',13,10>,d0
+	PRINTF 1,<'Next partition in block: %lx',13,10>,d0
 	cmp.l  #$FFFFFFFF,d0
 	bne    prepare_partition
 next_unit:   
@@ -422,8 +416,8 @@ open_device:
 ;   move.l  iohandler(a5),a1
 ;   moveq #0,d0
 ;clear_iohandler_loop:   
-;   move.l	#0,(a0)+
-;   addq.w #4,d0
+;   move.b	#0,0(a0,d0)
+;   addq.w #1,d0
 ;   cmp.w  #IOSTD_SIZE,d0
 ;   blt    clear_iohandler_loop
 ;   ;device in a6
@@ -486,9 +480,9 @@ unit_default_init_0:
 	beq      open_ok
 	bra      open_error
 
+	move.l   #0,d0
 open_ok;   
 	movem.l (SP)+,d1/a3/a1/a6
-	move.l   #0,d0
 	rts
 
 	
@@ -500,9 +494,8 @@ open_error:
 	CALLSYS FreeMem
 	move.l  #0,unitptr(a5)
 open_error_end:
-	movem.l (SP)+,d1/a3/a1/a6
 	move.l #IOERR_OPENFAIL,d0
-  rts
+  bra    open_ok
 
 close_device
 ;   movem.l a1/a6,-(SP)
@@ -714,6 +707,64 @@ addmem:
 	movem.l	(sp)+,d0-d2/a0-a1/a6
 	rts
 	ENDC
+	
+;This routine finds if a drive is attached:
+; first it issues a write to a register
+; second it reads the status and checks "busy" and "not ready"
+; if it is busy or not ready it might be there: wait 5 seconds for the drive to get ready
+; if it is busy and nor ready it is a empty bus->no HW
+; if it is neither busy nor "nort ready" we have to read/write some registers to check if it is there
+;d0 holdt the unit number
+	Public FindDrive
+FindDrive
+	movem.l  d1/d2,-(sp)	 
+	PRINTF 1,<'Searching for drive %ld',13,10>,d0
+	lsl.b    #4,d0
+	or.b     #$a0,d0
+	WATABYTE d0,TF_DRIVE_HEAD            ; select the drive
+	move.l   #TIMEOUT,d1                 ; wait timeout*sec 
+check_status:
+	WATABYTE #TESTBYTE1,TF_SECTOR_COUNT ; write first testbyte
+	RATABYTE	TF_ALTERNATE_STATUS,d0                ; get status
+	and.b    #BSY+DRDY,d0                ; eval Busy and DRDY  
+	beq      test_registers              ; none: test registers
+	cmp.b    #BSY+DRDY,d0                ; both: impossible
+	beq      bad_return_from_find
+	and.b    #BSY,d0
+	beq      test_registers              ;Not busy->test registers
+	PRINTF 1,<'Waiting to respond %ld sec',13,10>,d1
+	;bad busy wait
+	move.l   #500000,d0	    
+wait_loop:
+	tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
+	dbra     d0,wait_loop
+	dbra     d1,check_status             ; check again
+	bra      bad_return_from_find        ; timeout reached: not drive here   
+test_registers:
+	; Write some Registers and read thew value back
+	WATABYTE #TESTBYTE1,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
+	 cmp.b	#TESTBYTE1,d0
+	bne  	bad_return_from_find
+	WATABYTE #TESTBYTE2,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
+	 cmp.b	#TESTBYTE2,d0
+	bne  	bad_return_from_find
+	WATABYTE #TESTBYTE3,TF_SECTOR_COUNT
+	 RATABYTE	TF_SECTOR_COUNT,d0
+	 cmp.b	#TESTBYTE3,d0
+	bne  	bad_return_from_find
+	; we found a drive!
+good_return_from_find:
+	PRINTF 1,<'Found it!',13,10>
+	move.l   #0,d0   
+	bra.s    return_from_find
+bad_return_from_find:
+	PRINTF 1,<'Found it not!',13,10>
+	move.l   #-1,d0   
+return_from_find:
+	movem.l  (sp)+,d1/d2
+	rts
 
 endcode:
 	end

@@ -32,7 +32,6 @@
 	                        ;side slot interface or a Parallel port
 	                        ;interface.
 	include "/lib/bootinfo.i"  ;select name etc, of the device
-	include "/debug/debug-wrapper.i"
 	
 	;include "lib/myscsi.i" ;
 
@@ -87,9 +86,6 @@
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
 _intena  equ   $dff09a ;;;ML
 
-		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
-		ENDC
 
 FirstAddress:
 	moveq  #-1,d0 
@@ -236,14 +232,15 @@ init_end:
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
 	movem.l  d2/a2-a4,-(sp)
 	move.l   a1,a2                   ; save the iob
+	PRINTF 1,<'Opening device %ld',13,10>,d0
 	;------ see if the unit number is in range
 	cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
 	bne      opn1
 	move.l   #1,d0
 opn1
 	move.l   d0,d2
-	and.l    #$FFFFFFFE,d2           ;Allow unit numbers 0 and 1.
-	bne      Open_Error              ;unit number is out of range
+	cmp.l    #MD_NUMUNITS,d2         ;Allow unit numbers 0 and 1.
+	bge      Open_Error              ;unit number is out of range
   PRINTF 1,<'Opening unit: %lx',13,10>,d0
 	
 	;------ see if the unit is already initialized
@@ -283,7 +280,7 @@ nav1
 	move.b   d0,IO_ERROR(a2)
 	move.b   #NT_REPLYMSG,LN_TYPE(a2) ;IMPORTANT: Mark IORequest as "complete"
 Open_End
-	PRINTF 1,<'Opend ide.device %lx ',13,10>,d0
+	PRINTF 1,<'Opend ide.device Result: %lx ',13,10>,d0
 	subq.w   #1,LIB_OPENCNT(a6) ;** End of expunge protection <|>
 	movem.l  (sp)+,d2/a2-a4
 	rts
@@ -292,9 +289,8 @@ Open_Error:
 	moveq    #IOERR_OPENFAIL,d0
 	move.b   d0,IO_ERROR(a2)
 	move.l   d0,IO_DEVICE(a2)    ;IMPORTANT: trash IO_DEVICE on open failure
-	PRINTF 1,<'error',13,10>
-	
-	bra.s    Open_End
+	PRINTF 1,<'Open device error',13,10>	
+	bra      Open_End
 
 ;----------------------------------------------------------------------------
 ; There are two different things that might be returned from the Close
@@ -752,6 +748,7 @@ EmulateSCSI
 	beq      scsi_r6
 	bra      escsi4
 scsi_r6                             ; Read(6) packet
+  PRINTF 1,<'Emulate SCSI Read-Package',13,10>
 	move.l   (a0),d1
 	and.l    #$001FFFFF,d1
 	mulu     #512,d1
@@ -778,6 +775,7 @@ scsi_r6                             ; Read(6) packet
 	move.b   #1,scsi_Status(a6)
 	bra      escsi4
 scsi_ms                             ; Mode sense(6) packet
+  PRINTF 1,<'Emulate SCSI Mode Sense',13,10>
 	moveq    #0,d0
 	move.b   4(a0),d0 ; allocation length
 	move.l   d0,d1
@@ -793,34 +791,19 @@ escsi12
 	beq      page04
 	bra      escsi4
 page03
+  PRINTF 1,<'Emulate SCSI Mode Sense Page 3',13,10>
 	move.l   d1,scsi_Actual(a6)
 	subq.l   #1,d1
 	bmi      escsi4
+	;the data is filled in the init-routine
 	lea      mdu_EmulMSPage3(a3),a2
-	move.l   mdu_sectors_per_track(a3),d0
-	move.w   d0,14(a2)
 	bra      escsi15
 page04
+  PRINTF 1,<'Emulate SCSI Mode Sense Page 4',13,10>
 	move.l   d1,scsi_Actual(a6)
 	subq.l   #1,d1
 	bmi      escsi4
 	lea      mdu_EmulMSPage4(a3),a2
-	move.l   mdu_cylinders(a3),d0
-	move.l   d1,-(sp)
-	move.l   d0,d1
-	lsr.l    #8,d0
-	move.w   d0,6(a2)
-	move.w   d0,10(a2)
-	move.w   d0,18(a2)
-	move.b   d1,8(a2)
-	move.b   d1,12(a2)
-	move.b   d1,20(a2)
-	move.w   d1,14(a2)
-	swap     d1
-	move.b   d1,13(a2)
-	move.l   mdu_heads(a3),d0
-	move.b   d0,9(a2)
-	move.l   (sp)+,d1
 escsi15
 	move.l   scsi_Data(a6),a0
 escsi13
@@ -829,6 +812,7 @@ escsi13
 	clr.b    scsi_Status(a6)   
 	bra      escsi4
 scsi_cap                               ; Read Recorded Capacity packet
+  PRINTF 1,<'Emulate SCSI Capacity',13,10>
 	cmp.w    #CHS_ACCESS,mdu_lba(a3)
 	beq 		chscapa
 	move.l   mdu_numlba(a3),d0
@@ -855,19 +839,7 @@ setcapa
 	move.l   #8,scsi_Actual(a6)
 	bra      escsi4
 scsi_inq                               ; Inquiry packet
-	lea      mdu_model_num(a3),a2
-
-	lea      8+mdu_EmulInquiry(a3),a0
-
-	move.l   (a2)+,(a0)+
-	move.l   (a2),(a0)+
-
-	lea      mdu_ser_num(a3),a2
-	lea      16+mdu_EmulInquiry(a3),a0
-	move.l   (a2)+,(a0)+
-	move.l   (a2)+,(a0)+
-	move.l   (a2)+,(a0)+
-	move.l   (a2),(a0)
+  PRINTF 1,<'Emulate SCSI Inquiery',13,10>
 	move.l   scsi_Length(a6),d0
 	move.l   d0,d1
 	cmp.l    #36,d0
@@ -878,13 +850,22 @@ escsi2
 	subq.l   #1,d1
 	bmi      escsi4
 	move.l   scsi_Data(a6),a0
+	;the data is filled in the init-routine
 	lea      mdu_EmulInquiry(a3),a2
 escsi3
 	move.b   (a2)+,(a0)+
 	dbra     d1,escsi3
+	clr.b    scsi_Status(a6)
+	bra      escsi4
 escsi_ok
+  PRINTF 1,<'Emulate SCSI Test Unit Ready',13,10>
 	clr.b    scsi_Status(a6)
 escsi4
+	IFGE	DEBUG_DETAIL-1	
+	moveq    #0,d1
+  move.b   scsi_Status(a6),d1
+  PRINTF 1,<'Emulate SCSI End. Status= %ld',13,10>,d1
+  ENDC
 	movem.l  (sp)+,d1/a6
 	bsr   TermIO
 	movem.l  (sp)+,d0/d1/a0/a2/a6

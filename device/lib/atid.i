@@ -45,9 +45,9 @@ WATAWORD macro
  endm
 
 LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   512000      ; timeout value for ATA - motor is on
-LOOP2 equ   2560000     ; timeout value for ATA - motor is off
-LOOP3 equ   256000       ; timeout value for ATAPI
+LOOP  equ   256000      ; timeout value for ATA - motor is on
+LOOP2 equ   5120000     ; timeout value for ATA - motor is off
+LOOP3 equ   512000       ; timeout value for ATAPI
 TESTBYTE1 equ $B0
 TESTBYTE2 equ $0B
 TESTBYTE3 equ $51
