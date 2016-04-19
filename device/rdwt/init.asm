@@ -33,7 +33,7 @@ InitDrive   ;a3 = unitptr
 	IFGE	DEBUG_DETAIL-1	
 	moveq    #0,d0   
 	move.b   mdu_UnitNum(a3),d0
-  PRINTF 1,<'Init drive routine drive: %ld',13,10>,d0
+  PRINTF 1,<'Init drive routine drive: %lx',13,10>,d0
   ENDC
 	bsr      SelectDrive
 	bne			wfc1a														 ;no drive present!
@@ -365,7 +365,7 @@ SelectDrive:
 	moveq   #0,d0
 	move.b	mdu_UnitNum(a3),d0
 	;lsl.b	  #4,d0
-	or.b	  #$a0,d0
+	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
 	;RATABYTE	TF_STATUS,d0				; clear interrupt line

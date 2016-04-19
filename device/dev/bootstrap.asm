@@ -473,8 +473,10 @@ unit_allready_there:
 	move.l   #FALSE,mdu_no_disk(a3)
 	move.l   unitnum(a5),d0
 	beq      unit_default_init_0
-	bset.b   #SLAVE_BIT,d0
+	;bset.b   #SLAVE_BIT,d0
+	move.b   #$10,d0
 unit_default_init_0:
+  PRINTF 1,<'Set Unit Num %ld',13,10>,d0
 	move.b   d0,mdu_UnitNum(a3)
 	bsr      InitDrive 
 	move.w   mdu_drv_type(a3),d0

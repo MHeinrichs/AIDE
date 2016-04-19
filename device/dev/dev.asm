@@ -414,7 +414,8 @@ initunit0
 	move.l   a0,MP_SIGTASK(a3)
 	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)
 	bne.s    no_name_change
-	move.l   myTaskName2,mdu_tcb+LN_NAME(a3)
+	lea	     myTaskName2(pc),a0
+	move.l   a0,mdu_tcb+LN_NAME(a3)
 no_name_change:
 	
 	;------ initialize the unit's message port's list
