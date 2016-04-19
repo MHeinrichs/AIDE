@@ -230,23 +230,25 @@ init_end:
 	rts
 
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
-	movem.l  d2/a2-a4,-(sp)
+	movem.l  d2-d3/a2-a4,-(sp)
 	move.l   a1,a2                   ; save the iob
 	PRINTF 1,<'Opening device %ld',13,10>,d0
 	;------ see if the unit number is in range
+	moveq    #0,d3
 	cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
 	bne      opn1
-	move.l   #1,d0
+	moveq    #4,d3                   ;set offset for unit table
+	moveq    #0,d0
+	move.b   #1,d0
 opn1
-	move.l   d0,d2
-	cmp.l    #MD_NUMUNITS,d2         ;Allow unit numbers 0 and 1.
+	moveq    #0,d2
+	move.b   d0,d2                   ; save unit number
+	cmp.b    #MD_NUMUNITS,d0         ;Allow unit numbers 0 and 1.
 	bge      Open_Error              ;unit number is out of range
   PRINTF 1,<'Opening unit: %lx',13,10>,d0
 	
 	;------ see if the unit is already initialized
-	move.l   d0,d2                   ; save unit number
-	lsl.l    #2,d0                   ; convert 1->4
-	lea.l    md_Units(a6,d0.l),a4
+	lea.l    md_Units(a6,d3.l),a4
 	move.l   (a4),d0
 	bne.s    Open_UnitOK
 	;------ Try and conjure up a unit
@@ -267,12 +269,12 @@ Open_UnitOK:
 	;------ prevent delayed expunges
 	bclr     #LIBB_DELEXP,md_Flags(a6)
 	;If the IDE drive has not been initialised previously, do it now
-	cmp.w    #TRUE,mdu_firstcall(a3)
-	bne      nav1
+	cmp.b    #TRUE,mdu_firstcall(a3)
+	bne.s      nav1
 	bsr      InitDrive ;Call the IDE drive initialisation routine
 	move.w   mdu_drv_type(a3),d0  ;known drive type
   PRINTF 1,<'Init drive ok, drivetype: %ld',13,10>,d0
-	move.w   #FALSE,mdu_firstcall(a3)
+	move.b   #FALSE,mdu_firstcall(a3)
 nav1
 	cmp.w    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type
 	beq      Open_Error                     ; unknowns cannot be opened!
@@ -282,7 +284,7 @@ nav1
 Open_End
 	PRINTF 1,<'Opend ide.device Result: %lx ',13,10>,d0
 	subq.w   #1,LIB_OPENCNT(a6) ;** End of expunge protection <|>
-	movem.l  (sp)+,d2/a2-a4
+	movem.l  (sp)+,d2-d3/a2-a4
 	rts
 Open_Error:
 	bsr      FreeUnit
@@ -420,7 +422,13 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	PRINTF 1,<'Init Struct passed',13,10>
 
 	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
-	move.l   d2,mdu_UnitNum(a3)      ;initialize unit number
+	moveq.l  #0,d0
+	move.b   d2,d0                   ;unit number
+	cmp.b    #0,d0
+	beq.s    initunit0
+	move.b   #$10,d0                 ;set slave bit	
+initunit0	
+	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
 	move.l   a6,mdu_Device(a3)       ;initialize device pointer
 	
 	;------ start up the unit task.  We do a trick here --
@@ -440,7 +448,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	move.l   a0,mdu_tcb+TC_SPREG(a3)
 	lea	     mdu_tcb(a3),a0
 	move.l   a0,MP_SIGTASK(a3)
-	cmp.l    #0,d2
+	cmp.b    #0,d2
 	beq.s    no_name_change
 	move.l   myTaskName2,mdu_tcb+LN_NAME(a3)
 no_name_change:
@@ -463,8 +471,11 @@ no_name_change:
 	move.l   (sp)+,a3      ; restore UNIT pointer
 	
 	;------ mark us as ready to go
-	move.l   d2,d0                   ;unit number
-	lsl.l    #2,d0                   ,1->4
+	CLEAR    d0
+	cmp.b    #0,d2                   ;test unit number
+	beq.s    InitUnit_setUnitAdress
+	moveq.l  #4,d0                   ;set offset for unit 1 (slave)
+InitUnit_setUnitAdress:
 	move.l   a3,md_Units(a6,d0.l)    ;set unit table
  
 InitUnit_End:
@@ -493,15 +504,21 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    LINKSYS RemTask,md_SysLib(a6)
 
    ;------ save the unit number
-   move.l  mdu_UnitNum(a3),d2
+   moveq   #0,d2
+   move.b  mdu_UnitNum(a3),d2
 
    ;------ free the unit structure.
    bsr	   FreeUnit
 
    ;------ clear out the unit vector in the device
-   lsl.l   #2,d2
+   and.b   #$10,d2
+   bne.s   ExpungeUnit_Slave
+   moveq.l  #0,d2
+   bra.s   ExpungeUnit_ClearUnit
+ExpungeUnit_Slave:
+   moveq.l  #4,d2
+ExpungeUnit_ClearUnit:   
    clr.l   md_Units(a6,d2.l)
-
    move.l  (sp)+,d2
 	rts
 
@@ -608,7 +625,7 @@ BeginIO_NoCmd:
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 	move.l   a2,-(sp)
 	move.l   a1,a2
-;  move.l   mdu_UnitNum(a3),d0 ;XXXXXX d0 next 2.nd line!!
+;  move.b   mdu_UnitNum(a3),d0 ;XXXXXX d0 next 2.nd line!!
 	clr.b    IO_ERROR(a2)         ;No error so far
 	move.w   IO_COMMAND(a2),d0
 	lsl      #2,d0                ;Multiply by 4 to get table offset
@@ -673,9 +690,10 @@ MyMotor:                               ;park drive heads and stop motor
 	bne      mtr1
 	WAITNOTBSY d1,d2
 	beq      mtr1
-	move.l   mdu_UnitNum(a3),d0
-	lsl.b    #4,d0
-	or.b     #$a0,d0
+	moveq    #0,d0
+	move.b   mdu_UnitNum(a3),d0
+	;lsl.b    #4,d0
+	;or.b     #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY5US
 	WATABYTE #ATA_RECALIBRATE,TF_COMMAND
@@ -713,7 +731,7 @@ SCSIDirect     ;( iob:a1, unitptr:a3, devptr:a6 )
 	move.l   scsi_Command(a6),a2
 	move.l   IO_UNIT(a1),a3             ;get unit pointer
 	moveq    #0,d2
-	move.l   mdu_UnitNum(a3),d2
+	move.b   mdu_UnitNum(a3),d2
 
 	jsr   SCSIDirectCmd                 ;perform packet command
 
@@ -757,7 +775,8 @@ scsi_r6                             ; Read(6) packet
 	mulu     #512,d0
 	move.l   d0,-(sp)
 	move.l   scsi_Data(a6),a0
-	move.l   mdu_UnitNum(a3),d2
+	moveq    #0,d2
+	move.b   mdu_UnitNum(a3),d2
 	clr.b    scsi_Status(a6)
 	move.w   IO_COMMAND(a1),-(sp)
 	move.w   #CMD_READ,IO_COMMAND(a1)
@@ -948,7 +967,8 @@ drwf
 	bne      Sec_Error
 
 	move.l   d0,IO_ACTUAL(a1)   ;high offset is allready saved to d5
-	move.l   mdu_UnitNum(a3),d2
+	moveq    #0,d2
+	move.b   mdu_UnitNum(a3),d2
 	;jsr      ATARdWt
 	move.l   a1,-(sp)
 	move.l   mdu_ATARdWt(a3),a1
@@ -1130,8 +1150,8 @@ mdu_Init:
 	INITBYTE mdu_SectorBuffer,1
 	INITBYTE mdu_actSectorCount,1
 	INITWORD mdu_drv_type,UNKNOWN_DRV
-	INITWORD mdu_firstcall,TRUE
-	INITWORD mdu_auto,TRUE
+	INITBYTE mdu_firstcall,TRUE
+	INITBYTE mdu_auto,TRUE
 	INITWORD mdu_motor,TRUE
 	INITWORD mdu_lba,CHS_ACCESS
 	INITLONG mdu_sectors_per_track,CHS_ACCESS

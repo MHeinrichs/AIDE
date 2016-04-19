@@ -46,6 +46,7 @@ BD_REVISION equ 0
    ULONG    iohandler
    ULONG    unitptr
    ULONG    unitnum
+   ULONG    ATARdWtRoutine
    LABEL    MyMemPkt_Sizeof
 
 

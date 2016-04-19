@@ -19,8 +19,6 @@
 	
 	XLIB AllocMem
 	XLIB FreeMem
-	XREF waitreadytoacceptnewcommand
-	XREF SelectDrive
 
 
 ;macro INITATAINTERFACE *needs* to be executed once before this routine is ever called
@@ -33,12 +31,13 @@
 InitDrive   ;a3 = unitptr
 	movem.l  d1/d2/d3/d4/a0/a1/a2/a5,-(sp)	 
 	IFGE	DEBUG_DETAIL-1	
-	move.l   mdu_UnitNum(a3),d0
+	moveq    #0,d0   
+	move.b   mdu_UnitNum(a3),d0
   PRINTF 1,<'Init drive routine drive: %ld',13,10>,d0
   ENDC
 	bsr      SelectDrive
 	bne			wfc1a														 ;no drive present!
-	move.l   mdu_UnitNum(a3),d0
+	move.b   mdu_UnitNum(a3),d0
 	;bsr      FindDrive	
 	 ;bne			wfc1														 ;no drive present!
 ;get memory
@@ -51,7 +50,7 @@ InitDrive   ;a3 = unitptr
 	beq      wfc1
 	move.l   d0,d4      ;save pointer
 	RATABYTE TF_STATUS,d0   ;clear drive interrupt line
-	cmp.w    #TRUE,mdu_auto(a3)
+	cmp.b    #TRUE,mdu_auto(a3)
 	bne      notauto
 ;get drive parameters
 	move.w   #CHS_ACCESS,mdu_lba(a3)               ;presumption
@@ -232,6 +231,7 @@ multiple_sector_dis
 	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
 	beq      nolba                ;propably no lba support if no lba sectors
 	move.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
+	add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
 	;move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
 	;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
 	;bra		endauto				 ; saty at LBA28
@@ -250,6 +250,7 @@ multiple_sector_dis
 	bra      endauto
 nolba                            ;Then its CHS
 	move.w   #CHS_ACCESS,mdu_lba(a3)   ;store to internal buffer
+	or.b     #$A0,mdu_UnitNum(a3)
 	;Conner Peripherals CP3044 lies about its default translation mode
 	lea      CP3044txt(pc),a0
 	move.l   a5,a1
@@ -311,11 +312,11 @@ setupata
 	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
 	move.l   mdu_heads(a3),d0           ;LBA support
 	subq.b   #1,d0
-	or.b     #$a0,d0
-	tst.l    mdu_UnitNum(a3)
-	beq      pis1
-	bset   #4,d0
-pis1
+	or.b     mdu_UnitNum(a3),d0
+	;tst.b    mdu_UnitNum(a3)
+	;beq      pis1
+	;bset   #4,d0
+;pis1
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY400NS
 	bsr      waitreadytoacceptnewcommand
@@ -338,6 +339,70 @@ kr21:
 	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a2/a5
 	rts
 
+	Public ResetIDE
+;SoftwareReset IDE-BUS
+ResetIDE
+	movem.l  d0,-(sp)
+	WATABYTE #8+nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
+	moveq.l	 #16,d0 ;wait 
+rstwait1:
+	DLY5US
+	dbne		d0,rstwait1
+	;release reset
+	WATABYTE #8+nIEN,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
+	moveq.l	 #120,d0 ;wait 200ms
+rstwait2:
+	tst.b	 $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
+	dbne		d0,rstwait2
+	movem.l  (sp)+,d0
+  rts
+  
+  ;perform safe switch to act_drv drive
+	PUBLIC	SelectDrive
+SelectDrive:
+	moveq   #0,d0
+	move.b	mdu_UnitNum(a3),d0
+	;lsl.b	  #4,d0
+	;or.b	  #$a0,d0
+	WATABYTE d0,TF_DRIVE_HEAD
+	DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
+	;RATABYTE	TF_STATUS,d0				; clear interrupt line
+	;check if it worked: write something to the sector count and read it back
+	;WATABYTE  #$5A,TF_SECTOR_NUMBER
+	;RATABYTE	TF_SECTOR_NUMBER,d0				
+	;cmp.b	  #$5A,d0
+	;beq		sdr4	
+	;move.l	#1,d0					 ; clear zero flag
+sdr4
+	move.l	#0,d0					 ; clear zero flag
+	rts	
+
+
+waitreadytoacceptnewcommand:
+	movem.l  d1-d2,-(sp)
+	move.l	#LOOP,d1
+;	cmp.w	 #TRUE,mdu_motor(a3)
+;	beq		fovc
+;	move.l	#LOOP2,d1
+fovc
+	WAITNOTBSY D0,D2
+	beq.s	 wre1
+	RATABYTE TF_STATUS,d0
+	and.b	 #BSY+DRDY+DWF+ERR,d0
+	cmp.b	 #DRDY,d0
+	bne.s	 oiuy
+	move.l	#0,d0
+	movem.l  (sp)+,d1-d2
+	rts
+oiuy
+	DLY5US	; make a processor speed independent minimum delay
+	and.b	 #DWF+ERR,d0
+	dbne	  d1,fovc
+wre1
+	movem.l  (sp)+,d1-d2
+	move.l	#-865,d0
+	rts
+	
 	cnop  0,4
 CP3044txt   dc.b  'CP3044 ',0    ; 8 bytes = 2 longwords ->alligned!
 	cnop  0,4

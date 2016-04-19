@@ -49,7 +49,6 @@ MD_NUMUNITS EQU   $2
 	UBYTE    mdu_SectorBuffer	 ;max number of sectors per transfer block
 	;long alligned  
 	APTR     mdu_Device
-	ULONG    mdu_UnitNum
 	ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
 	ULONG    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
 	ULONG    mdu_numlba48         ;only for drives with LBA48_ACCESS
@@ -68,8 +67,6 @@ MD_NUMUNITS EQU   $2
 	STRUCT   mdu_EmulMSPage4,7*4
 	STRUCT   mdu_rs_cmd,6*2       
 	UWORD    mdu_drv_type         ;see bellow for possible values
-	UWORD    mdu_firstcall        ;was drive called yet?
-	UWORD    mdu_auto             ;get drive parameters automatic? = TRUE
 	UWORD    mdu_lba              ;use LBA? For ATAPI always TRUE
 	UWORD    mdu_motor            ;motor status
 	;odd word allign
@@ -77,7 +74,9 @@ MD_NUMUNITS EQU   $2
 	UBYTE    mdu_act_Flags        ;actual SCSI-Packet Flags
 	;Long align
 	UBYTE    mdu_act_Status			 ;actual SCSI-Status
-	UBYTE    mdu_pad,3
+	UBYTE    mdu_UnitNum
+	UBYTE    mdu_firstcall        ;was drive called yet?
+	UBYTE    mdu_auto             ;get drive parameters automatic? = TRUE
 	;Long align
 	ULONG    mdu_ATARdWt          ;Relocation of ATARdWt routine
 	STRUCT   mdu_stack,MYPROCSTACKSIZE
@@ -95,6 +94,8 @@ SATAPI_DRV   equ  4
 CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
+
+SLAVE_BIT equ 4
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2
@@ -117,11 +118,11 @@ MYTASKNAME2   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.28 (06.04.2016)",13,10,0
+	   dc.b    "IDE.Device 2.29 (06.04.2016)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 28
+REVISION equ 29
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

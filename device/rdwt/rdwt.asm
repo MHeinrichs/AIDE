@@ -38,6 +38,8 @@
 	include "/lib/asmsupp.i"; Various helpers from Commodore
 	XLIB AllocMem  
 	XLIB FreeMem
+	XREF ResetIDE
+	XREF SelectDrive
 
 
 	Public	ATARdWt
@@ -51,7 +53,7 @@ ATARdWt:
 	;d2 unit number
 	movem.l	d1-d7/a0-a6,-(sp)
 	move.l	d0,d3			  ;save length to somewhere save
-	;bsr			SelectDrive
+	;jsr			SelectDrive
 	;bne.s		errcode
 	;move.l	#BADUNIT,d0		 ;Check that unit is 0 or 1
 	;cmp.l	 #1,d2			  
@@ -101,7 +103,7 @@ errcode
 	cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
 	beq.s	errcodeend
 	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
-	bsr	ResetIDE
+	jsr	  ResetIDE
 errcodeend
 	;WAITNOTBSY D0,D1
 	move.l	#1,d0
@@ -160,10 +162,11 @@ issueCHSread
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
-	move.l	mdu_UnitNum(a3),d0
-	lsl.b	 #4,d0
+	moveq   #0,d0
+	move.b	mdu_UnitNum(a3),d0
+	;lsl.b	 #4,d0
 	or.b	  d2,d0
-	or.b	  #$a0,d0
+	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	bra.s	 sendreadcommand
 
@@ -175,9 +178,10 @@ issueLBAread
 	WATABYTE d0,TF_LBA_MID_BYTE			;lba bits 8..15
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;lba bits 16..23
-	move.l	mdu_UnitNum(a3),d2
-	lsl.b	 #4,d2
-	add.b	 #L,d2
+	moveq   #0,d2
+	move.b	mdu_UnitNum(a3),d2
+	;lsl.b	 #4,d2
+	;add.b	 #L,d2
 	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
 	and.l	 #$0000000f,d0					
 	or.l	  d0,d2
@@ -230,10 +234,11 @@ issueCHSwrite
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
-	move.l	mdu_UnitNum(a3),d0
-	lsl.b	 #4,d0
+	moveq   #0,d0
+	move.b	mdu_UnitNum(a3),d0
+	;lsl.b	 #4,d0
 	or.b	  d2,d0
-	or.b	  #$a0,d0
+	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	bra.s	 sendwritecommand
 
@@ -245,9 +250,10 @@ issueLBAwrite
 	WATABYTE d0,TF_LBA_MID_BYTE			;LBA  bits  8..15
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
-	move.l	mdu_UnitNum(a3),d2
-	lsl.b	 #4,d2
-	add.b	 #L,d2
+	moveq   #0,d2
+	move.b	mdu_UnitNum(a3),d2
+	;lsl.b	 #4,d2
+	;add.b	 #L,d2
 	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
 	and.l	 #$0000000f,d0					
 	or.l	  d0,d2
@@ -303,7 +309,7 @@ getCHS		;convert block number to Cylinder / Head / Sector numbers
 	and.l	 #$ff,d1			  ;cylinder high
 	rts
 
-	Public waitreadytoacceptnewcommand
+;ugly colde duplication but otherwise i whould have a slow rom routine in the main IO-path 
 waitreadytoacceptnewcommand:
 	movem.l  d1-d2,-(sp)
 	move.l	#LOOP,d1
@@ -330,47 +336,10 @@ wre1
 	rts
 
 
-	Public ResetIDE
-;SoftwareReset IDE-BUS
-ResetIDE
-	movem.l  d0,-(sp)
-	WATABYTE #8+nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	moveq.l	 #16,d0 ;wait 
-rstwait1:
-	DLY5US
-	dbne		d0,rstwait1
-	;release reset
-	WATABYTE #8+nIEN,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	moveq.l	 #120,d0 ;wait 200ms
-rstwait2:
-	tst.b	 $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
-	dbne		d0,rstwait2
-	movem.l  (sp)+,d0
-  rts
+
   Public ATARdWtLen
 ATARdWtLen = *-ATARdWt
 	
-
-
-;perform safe switch to act_drv drive
-	PUBLIC	SelectDrive
-SelectDrive:
-	move.l	mdu_UnitNum(a3),d0
-	lsl.b	 #4,d0
-	or.b	  #$a0,d0
-	WATABYTE d0,TF_DRIVE_HEAD
-	DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
-	;RATABYTE	TF_STATUS,d0				; clear interrupt line
-	;check if it worked: write something to the sector count and read it back
-	;WATABYTE  #$5A,TF_SECTOR_NUMBER
-	;RATABYTE	TF_SECTOR_NUMBER,d0				
-	;cmp.b	  #$5A,d0
-	;beq		sdr4	
-	;move.l	#1,d0					 ; clear zero flag
-sdr4
-	move.l	#0,d0					 ; clear zero flag
-	rts	
-
 
 ; a0 = scsi_Data, d0 = scsi_Length, a2 = scsi_Command, a6 = SCSICmd
 ; d2 = unit number, a3 = io_unit
@@ -378,7 +347,7 @@ sdr4
 SCSIDirectCmd
 	movem.l  a0-a6/d0-d6,-(sp)
 	move.l	d0,d1 ;save d0 somewhere save
-	bsr		SelectDrive
+	jsr		SelectDrive
 	bne		sdc1
 	move.l	a0,a5
 sdc3
@@ -457,8 +426,8 @@ Packet
 	beq		pretec
 	WAITNOTDRQ D0,D6
 	beq		pretec
-	lsl.b	 #4,d2
-	or.b	  #$a0,d2
+	;lsl.b	 #4,d2
+	;or.b	  #$a0,d2
 	WATABYTE d2,TF_DRIVE_HEAD			  ;set task file registers
 	;DLY400NS
 	WATABYTE #0,TF_SECTOR_COUNT

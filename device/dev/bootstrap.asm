@@ -52,7 +52,6 @@
 	XLIB InitResident
 	XLIB AllocConfigDev
 	XLIB AddConfigDev
-	XREF ATARdWt
 	XREF InitDrive
 	XREF ResetIDE
 		
@@ -199,6 +198,12 @@ initRoutine:
 	
 device_present:
 	move.l  d0,residentstructure(a5)
+	move.l  residentstructure(a5),a1	
+	move.l  md_ATARdWt(a1),ATARdWtRoutine(a5)
+	IFGE	DEBUG_DETAIL-1	
+	move.l  ATARdWtRoutine(a5),d0
+	PRINTF 1,<'ATARdWt routine located at %lx',13,10>,D0
+	ENDC
 	; Open expansion.library
 	lea     expname,a1
 	moveq   #0,d0
@@ -259,7 +264,7 @@ search_rdb:
 	bne    next_unit ;on error go to next unit
 	;theoretically i have to checksum it...
 	move.l rdb_ID(a0),d5
-	;PRINTF 1,<'block id: %lx, expected: %lx',13,10>,d5,d6
+	PRINTF 1,<'block id: %lx, expected: %lx',13,10>,d5,d6
 	cmp.l  d5,d6
 	beq    rdb_found   
 	addi.l #512,d0  
@@ -455,8 +460,8 @@ unit_allready_there:
 	move.b	#1,mdu_SectorBuffer(a3) ;device must at least handle one sector per read/write
 	move.b	#1,mdu_actSectorCount(a3) 
 	move.w   #UNKNOWN_DRV,mdu_drv_type(a3)
-	move.w   #TRUE,mdu_firstcall(a3)
-	move.w   #TRUE,mdu_auto(a3)
+	move.b   #TRUE,mdu_firstcall(a3)
+	move.b   #TRUE,mdu_auto(a3)
 	move.w   #CHS_ACCESS,mdu_lba(a3)
 	move.l   #0,mdu_sectors_per_track(a3)
 	move.l   #0,mdu_heads(a3)
@@ -468,12 +473,13 @@ unit_allready_there:
 	move.l   #FALSE,mdu_no_disk(a3)
 	move.l   unitnum(a5),d0
 	beq      unit_default_init_0
-	move.l   #1,d0
+	moveq    #0,d0
+	move.b   #$10,d0
 unit_default_init_0:
-	move.l   d0,mdu_UnitNum(a3)
+	move.b   d0,mdu_UnitNum(a3)
 	bsr      InitDrive 
 	move.w   mdu_drv_type(a3),d0
-	;PRINTF 1,<'Unit is of type %d',13,10>,d0
+	PRINTF 1,<'Unit is of type %d',13,10>,d0
 	cmp.w    #ATA_DRV,d0
 	beq      open_ok
 	cmp.w    #SATA_DRV,d0
@@ -683,14 +689,18 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
 	;d5 io offset high  !NEW!!
 	;d2 unit number 
 	move.l unitptr(a5),a3
-	move.l mdu_UnitNum(a3),d2
+	moveq  #0,d2
+	move.b mdu_UnitNum(a3),d2
+	PRINTF 1,<'Reading block %lx on unit %lx',13,10>,d0,d2
 	move.l #READOPE,a2
 	move.l #0,d5
 	move.l d0,d1
 	move.l #512,d0
 	;PRINTF 1,<'Call ATRdWt',13,10>
-	bsr ATARdWt
-	;PRINTF 1,<'Returning reading block with %lx',13,10>,d0   
+	move.l   a1,-(sp)
+	move.l   ATARdWtRoutine(a5),a1
+  jsr      (a1)
+  move.l   (sp)+,a1
 	movem.l (SP)+,d0-d7/a0-a6
 	rts
 
@@ -713,14 +723,13 @@ addmem:
 ; second it reads the status and checks "busy" and "not ready"
 ; if it is busy or not ready it might be there: wait 5 seconds for the drive to get ready
 ; if it is busy and nor ready it is a empty bus->no HW
-; if it is neither busy nor "nort ready" we have to read/write some registers to check if it is there
-;d0 holdt the unit number
+; if it is neither busy nor "not ready" we have to read/write some registers to check if it is there
+;d0 holds the unit number
 	Public FindDrive
 FindDrive
 	movem.l  d1/d2,-(sp)	 
 	PRINTF 1,<'Searching for drive %ld',13,10>,d0
 	lsl.b    #4,d0
-	or.b     #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD            ; select the drive
 	move.l   #TIMEOUT,d1                 ; wait timeout*sec 
 check_status:
