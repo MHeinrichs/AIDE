@@ -1,24 +1,24 @@
 ASSIGN IDE_BASE_ADDRESS: IDE_BASE_ADDRESS.i  ;the base address
 
 
-assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
 delete /dev/dev.o
-/bin/a68k -ii: /dev/dev.asm   ; main source of exec device
 delete /rdwt/rdwt.o
-/bin/a68k -ii: /rdwt/rdwt.asm ; read/write routines of device
 delete /rdwt/init.o
-/bin/a68k -ii: /rdwt/init.asm ; init routines of device
 delete /debug/debug-wrapper.o
-/bin/a68k -ii: /debug/debug-wrapper.asm   ; debug routine
 delete /dev/bootstrap.o
+delete ide.device
+delete bootide.device
+assign i: Work:ADK2.1/NDK/NDK_2.0/NDK2.0-4/INCLUDE
+/bin/a68k -ii: /dev/dev.asm   ; main source of exec device
+/bin/a68k -ii: /rdwt/rdwt.asm ; read/write routines of device
+/bin/a68k -ii: /rdwt/init.asm ; init routines of device
+/bin/a68k -ii: /debug/debug-wrapper.asm   ; debug routine
 /bin/a68k -ii: /dev/bootstrap.asm   ; main source of boot device
 
-delete ide.device
-;/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
-/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /lib/amiga31.lib
-delete bootide.device
-;/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib 
-/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /lib/amiga31.lib 
+/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
+;/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /lib/amiga31.lib
+/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib 
+;/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /lib/amiga31.lib 
 
 assign IDE_BASE_ADDRESS: remove
 assign i: remove

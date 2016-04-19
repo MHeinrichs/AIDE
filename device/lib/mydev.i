@@ -3,7 +3,7 @@ MYPROCPRI   EQU   5
 
 	include "/debug/debug-wrapper.i"
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 		ENDC
 
 	DEVINIT

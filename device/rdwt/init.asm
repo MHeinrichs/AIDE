@@ -135,6 +135,8 @@ wfc2
 	beq      wfc1d
 	RATABYTE TF_STATUS,d0               ;clear interrupt line
 	move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
+	add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
+	;or.b	   #$A0,mdu_UnitNum(a3)    ;set bit 7 and 5
 	clr.l    mdu_sectors_per_track(a3)
 	clr.l    mdu_heads(a3)
 	clr.l    mdu_cylinders(a3)
@@ -312,11 +314,11 @@ setupata
 	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
 	move.l   mdu_heads(a3),d0           ;LBA support
 	subq.b   #1,d0
-	or.b     mdu_UnitNum(a3),d0
-	;tst.b    mdu_UnitNum(a3)
-	;beq      pis1
-	;bset   #4,d0
-;pis1
+	;or.b     mdu_UnitNum(a3),d0
+	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)
+	beq      pis1
+	bset     #SLAVE_BIT,d0
+pis1
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY400NS
 	bsr      waitreadytoacceptnewcommand
@@ -363,7 +365,7 @@ SelectDrive:
 	moveq   #0,d0
 	move.b	mdu_UnitNum(a3),d0
 	;lsl.b	  #4,d0
-	;or.b	  #$a0,d0
+	or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
 	;RATABYTE	TF_STATUS,d0				; clear interrupt line

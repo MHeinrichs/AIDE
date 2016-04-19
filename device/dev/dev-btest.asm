@@ -198,10 +198,10 @@ Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
 	move.l   a1,a2                   ; save the iob
 	PRINTF 1,<'Opening device %ld',13,10>,d0
 	;------ see if the unit number is in range
-	moveq    #0,d3
+	moveq.l  #0,d3
 	cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
 	bne      opn1
-	move.l   #4,d3                   ;set offset for unit table
+	moveq.l  #4,d3                   ;set offset for unit table
 	moveq    #0,d0
 	move.b   #1,d0
 opn1
@@ -209,7 +209,7 @@ opn1
 	move.b   d0,d2                   ; save unit number
 	cmp.b    #MD_NUMUNITS,d0         ;Allow unit numbers 0 and 1.
 	bge      Open_Error              ;unit number is out of range
-  PRINTF 1,<'Opening unit: %lx offset %ld',13,10>,d0,d3
+  PRINTF 1,<'Opening unit: %lx',13,10>,d0
 	
 	;------ see if the unit is already initialized
 	lea.l    md_Units(a6,d3.l),a4
@@ -384,11 +384,11 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	lea.l    mdu_Init(PC),A1
 	LINKSYS  InitStruct,md_SysLib(a6)
 	PRINTF 1,<'Init Struct passed',13,10>
-	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
 
+	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
 	moveq.l  #0,d0
-	;move.b   d2,d0                   ;unit number
-	cmp.b    #0,d2
+	move.b   d2,d0                   ;unit number
+	cmp.b    #0,d0
 	beq.s    initunit0
 	bset.b   #SLAVE_BIT,d0                 ;set slave bit	
 initunit0	
@@ -412,8 +412,8 @@ initunit0
 	move.l   a0,mdu_tcb+TC_SPREG(a3)
 	lea	     mdu_tcb(a3),a0
 	move.l   a0,MP_SIGTASK(a3)
-	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)
-	bne.s    no_name_change
+	btst.b   #SLAVE_BIT,mdu_UnitNum(a3) ;is slave set?
+	beq.s    no_name_change
 	move.l   myTaskName2,mdu_tcb+LN_NAME(a3)
 no_name_change:
 	
@@ -435,12 +435,11 @@ no_name_change:
 	move.l   (sp)+,a3      ; restore UNIT pointer
 	
 	;------ mark us as ready to go
-	moveq.l  #0,d0
-	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)                   ;test unit number
+	moveq.l  #0,d0                   ;set offset for unit 0 (master)
+	btst.b   #SLAVE_BIT,mdu_UnitNum(a3) ;is bit 4 = slave set?
 	beq.s    InitUnit_setUnitAdress
 	moveq.l  #4,d0                   ;set offset for unit 1 (slave)
 InitUnit_setUnitAdress:
-	PRINTF 1,<'Setting address %lx at offset %ld',13,10>,a3,d0
 	move.l   a3,md_Units(a6,d0.l)    ;set unit table
  
 InitUnit_End:
@@ -476,12 +475,10 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    bsr	   FreeUnit
 
    ;------ clear out the unit vector in the device
-   btst.b  #SLAVE_BIT,d2
-   bne.s   ExpungeUnit_Slave
    moveq.l  #0,d2
-   bra.s   ExpungeUnit_ClearUnit
-ExpungeUnit_Slave:
-   move.l  #4,d2
+	 btst.b   #SLAVE_BIT,d2 ;is bit 4 = slave set?
+   beq.s   ExpungeUnit_ClearUnit
+   moveq.l  #4,d2
 ExpungeUnit_ClearUnit:   
    clr.l   md_Units(a6,d2.l)
    move.l  (sp)+,d2
