@@ -102,26 +102,26 @@ domore
 	move.l	#MAX_TRANSFER,d5				  ;Make max_transfer sectors
 
 between1andMax
-	move.l	d5,d4					 ;d5 is number of sectors in this round
+	move.l d5,d4					 ;d5 is number of sectors in this round
 	and.l	 #$FF,d4				  ; 256 sectors = 00
 maskd4done	
 	;WAITREADYFORNEWCOMMAND D1,D3
-	bsr		waitreadytoacceptnewcommand
+	bsr		 waitreadytoacceptnewcommand
+	bsr    setupdrive
 	cmp.l	 #READOPE,a2
 	beq.s	 wasread
-	bsr		writesectors			;Format or Write
-	cmp.l	 #0,d0					 ;Error?
-	beq.s	 sectoracok
-	bra.s	 Quits 
+	bsr		 writesectors			;Format or Write
+	bra.s	 checkresult 
 wasread
-	bsr		readsectors
+	bsr		 readsectors
+checkresult
 	cmp.l	 #0,d0					 ;error?
 	bne.s	 Quits
 sectoracok
 	add.l	 d5,d6					 ;next block number
 	sub.l	 d5,d7
 	bne.s	 domore
-	move.l	#0,d0
+	move.l #0,d0
 	
 Quits
 	cmp.l	#0,d0
@@ -140,40 +140,7 @@ errcodeend
 	move.l	#1,d0
 	bra.s	okcode
 
-
-readsectors ;d4 is the number of sectors to read (between 1 and 64)
-	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
-	bge.s	 issueLBAread
-
-issueCHSread
-	bsr		getCHS
-	move.l	d6,d0 ;logical block number
-	WATABYTE d4,TF_SECTOR_COUNT
-	WATABYTE d0,TF_CYLINDER_LOW
-	WATABYTE d1,TF_CYLINDER_HIGH
-	WATABYTE d3,TF_SECTOR_NUMBER
-	moveq   #0,d0
-	move.b	mdu_UnitNum(a3),d0
-	or.b	  d2,d0
-	WATABYTE d0,TF_DRIVE_HEAD
-	bra.s	 sendreadcommand
-
-issueLBAread
-	move.l	d6,d0 ;logical block number
-	WATABYTE d4,TF_SECTOR_COUNT
-	WATABYTE d0,TF_LBA_LOW_BYTE		  ;lba bits 0..7
-	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_MID_BYTE			;lba bits 8..15
-	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;lba bits 16..23
-	moveq   #0,d2
-	move.b	mdu_UnitNum(a3),d2
-	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
-	and.l	 #$0000000f,d0					
-	or.l	  d0,d2
-	move.l	d6,d0							 ;restore d0	
-	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba  lba bits 24..27
-sendreadcommand
+readsectors ;d4 is the number of sectors to read (between 1 and MAX_TRANSFER)
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
 	sub.l	 #1,d4				 ;for dbne
 readnextblk
@@ -183,7 +150,6 @@ readnextblk
 	WAITDRQ	D2,D3
 	beq.s	 rsfl
 	RATADATAA5_512_BYTES
-	;DLY5US								;wait DRQ go 0
 	;check for errors
 	WAITNOTBSY D2,D3
 	beq.s	 rsfl
@@ -197,44 +163,8 @@ rsfl									  ;some error in reading
 	move.l	#1,d0
 	rts
 
-writesectors ;d4 is the number of sectors to write (between 1 and 64)
-
-issuewrite
-	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
-	bge.s	 issueLBAwrite
-
-issueCHSwrite
-	bsr		getCHS
-	move.l	d6,d0 ;logical block number
-	WATABYTE d4,TF_SECTOR_COUNT
-	WATABYTE d0,TF_CYLINDER_LOW
-	WATABYTE d1,TF_CYLINDER_HIGH
-	WATABYTE d3,TF_SECTOR_NUMBER
-	moveq   #0,d0
-	move.b	mdu_UnitNum(a3),d0
-	or.b	  d2,d0
-	WATABYTE d0,TF_DRIVE_HEAD
-	bra.s	 sendwritecommand
-
-issueLBAwrite
-	move.l	d6,d0 ;logical block number
-	WATABYTE d4,TF_SECTOR_COUNT
-	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA  bits  0..7
-	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_MID_BYTE			;LBA  bits  8..15
-	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
-	moveq   #0,d2
-	move.b	mdu_UnitNum(a3),d2
-	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
-	and.l	 #$0000000f,d0					
-	or.l	  d0,d2
-	move.l	d6,d0							 ;restore d0
-	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba; lba bits 24..27
-
-sendwritecommand:
+writesectors ;d4 is the number of sectors to write (between 1 and MAX_TRANSFER)
 	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
-
 	sub.l	 #1,d4				 ;for dbne	
 writenextoneblockki
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
@@ -247,7 +177,6 @@ writenextoneblockki
 	WAITDRQ	D2,D3
 	beq.s	 wekfha
 	WATADATAA5_512_BYTES  
-	;DLY5US								;BSY will go high within 5 microseconds after filling buffer
 	dbne	  d4,writenextoneblockki
 	move.l	#0,d0
 	rts									;d0==0	ok
@@ -255,7 +184,12 @@ wekfha
 	move.l	#1,d0
 	rts									;some error in writing
 	
-getCHS		;convert block number to Cylinder / Head / Sector numbers
+setupdrive:
+	move.l	d6,d0 ;logical block number
+	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
+	bge 	 issueLBA
+	;chs
+  ;convert block number to Cylinder / Head / Sector numbers
 	move.l	d0,d3				 ;d0 = number of block (block numbers begin from 0)
 	move.l	mdu_sectors_per_track(a3),d2
 	divu	  d2,d3
@@ -274,7 +208,34 @@ getCHS		;convert block number to Cylinder / Head / Sector numbers
 	and.l	 #$ff,d0			  ;cylinder low
 	lsr.l	 #8,d1
 	and.l	 #$ff,d1			  ;cylinder high
-	rts
+	move.l	d6,d0 ;logical block number
+	WATABYTE d4,TF_SECTOR_COUNT
+	WATABYTE d0,TF_CYLINDER_LOW
+	WATABYTE d1,TF_CYLINDER_HIGH
+	WATABYTE d3,TF_SECTOR_NUMBER
+	moveq   #0,d0
+	move.b	mdu_UnitNum(a3),d0
+	or.b	  d2,d0
+	WATABYTE d0,TF_DRIVE_HEAD
+	bra.s	 setupdriveend
+
+issueLBA;
+	WATABYTE d4,TF_SECTOR_COUNT
+	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA  bits  0..7
+	lsr.l	 #8,d0
+	WATABYTE d0,TF_LBA_MID_BYTE			;LBA  bits  8..15
+	lsr.l	 #8,d0
+	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
+	moveq   #0,d2
+	move.b	mdu_UnitNum(a3),d2
+	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
+	and.l	 #$0000000f,d0					
+	or.l	  d0,d2
+	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba; lba bits 24..27
+setupdriveend:
+	move.l	d6,d0							 ;restore d0
+  rts
+
 
 ;ugly colde duplication but otherwise i whould have a slow rom routine in the main IO-path 
 waitreadytoacceptnewcommand:
