@@ -50,29 +50,19 @@ ATARdWt:
 	;d0 io length
 	;d1 io offset low
 	;d5 io offset high  !NEW!!
-	;d2 unit number
 	movem.l	d1-d7/a0-a6,-(sp)
 	move.l	d0,d3			  ;save length to somewhere save
-	;jsr			SelectDrive
-	;bne.s		errcode
-	;move.l	#BADUNIT,d0		 ;Check that unit is 0 or 1
-	;cmp.l	 #1,d2			  
-	;bgt.s	 Quits	move.l	#BADLENGTH,d0	  ;Check if length is multiple of 512
-	;move.l	#BADLENGTH,d0	  ;Check if length is multiple of 512
-	;move.l	d3,d4
-	;and.l		#$1ff,d4
-	;bne.s		Quits
 	move.l	#BADLENGTH,d0	  ;No sectors ?
 	lsr.l		#8,d3				 ;Divide by 512 to get
 	lsr.l		#1,d3				 ;Number of sectors	
-	beq.s		Quits
+	beq 		Quits
 	move.l	#BADOFFSET,d0	  ;Check if offset is too large: d1 holds 23 bits (32 minus 9)
 	lsr.l		#8,d1
 	lsr.l		#1,d1			  ;now d1 holds the bits 0..23 of the start block			
 	;check if d5 contains an offset >32
 	;remember that d1 holds the first 23 bits so this can be only 9 additional ones! 
 	cmp.l		#$1FF,d5			  
-	bgt.s		Quits
+	bgt 		Quits
 	move.l	d5,d4			  ;only lower five bits are allowed! this could be extended by 8 bits for REAl 48LBA access!
 	and.l	#$1FF,d4
 	ror.l	#8,d4			  ;now rotate the high offset (9 bits) to the right position and add it to d1
@@ -80,7 +70,7 @@ ATARdWt:
 	or.l	d4,d1			  ;d1 holds now the start block!
 	move.l	d1,d4			  ;now copy d1 to d4
 	add.l	d3,d4			  ;add the blocks in d3 to transfer and see if we hit the boundary
-	bcs.s	Quits			  ;overflow!>quit	
+	bcs  	Quits			  ;overflow!>quit	
 	;cmp.w	 #LBA48_ACCESS,mdu_lba(a3) ;is it a LBA48 drive, this should be able to handle 32bit addresses ;)?		
 	;beq	transfer		  ;everything is ok!
 	and.l	#$F0000000,d4	  ; just the first 28 bits set?
@@ -89,8 +79,50 @@ transfer
 	move.l	a0,a5				 ;Start address
 	move.l	d1,d6				 ;Start block
 	move.l	d3,d7				 ;# blocks
-jooei								 ;a2 = #READOPE or #WRITEOPE
-	bsr	doblocks			 ;a5:startaddress, d6:startblock, d7:numberofblocks
+	;register sum up:
+	;a0 = free (start address)
+	;a1 = free
+	;a2 = #READOPE or #WRITEOPE
+	;a3 = unit pointer
+	;a4 = free
+	;a5 = startaddress (buffer to write to)
+	;a6 = free
+	;d0 = free
+	;d1 = free
+	;d2 = free
+	;d3 = free
+	;d4 = free -> counter for sector
+	;d5 = free -> number of sectors per read/write
+	;d6 = blockoffset to write to
+	;d7 = sectors to write
+domore
+	move.l	d7,d5
+	cmp.l	 #MAX_TRANSFER,d5
+	ble.s	 between1andMax
+	move.l	#MAX_TRANSFER,d5				  ;Make max_transfer sectors
+
+between1andMax
+	move.l	d5,d4					 ;d5 is number of sectors in this round
+	and.l	 #$FF,d4				  ; 256 sectors = 00
+maskd4done	
+	;WAITREADYFORNEWCOMMAND D1,D3
+	bsr		waitreadytoacceptnewcommand
+	cmp.l	 #READOPE,a2
+	beq.s	 wasread
+	bsr		writesectors			;Format or Write
+	cmp.l	 #0,d0					 ;Error?
+	beq.s	 sectoracok
+	bra.s	 Quits 
+wasread
+	bsr		readsectors
+	cmp.l	 #0,d0					 ;error?
+	bne.s	 Quits
+sectoracok
+	add.l	 d5,d6					 ;next block number
+	sub.l	 d5,d7
+	bne.s	 domore
+	move.l	#0,d0
+	
 Quits
 	cmp.l	#0,d0
 	bne.s	errcode
@@ -105,73 +137,29 @@ errcode
 	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
 	jsr	  ResetIDE
 errcodeend
-	;WAITNOTBSY D0,D1
 	move.l	#1,d0
 	bra.s	okcode
 
 
-doblocks	 ;d7=sectors>0 (A5=startaddress, d6=startblock)
-gsfg
-	;movem.l  d4-d7/a5,-(sp)
-domore
-	move.l	d7,d5
-	and.l	 #$ff,d5
-	bne.s	 between1and16
-	move.l	#$100,d5				  ;Make 64 sectors
-
-between1and16
-	move.l	d5,d4					 ;d5 is number of sectors in this round
-	and.l	 #$FF,d4				  ; 256 sectors = 00
-maskd4done	
-	bsr		waitreadytoacceptnewcommand
-	cmp.l	 #READOPE,a2
-	beq.s	 wasread
-	bsr		writesectors			;Format or Write
-	cmp.l	 #0,d0					 ;Error?
-	beq.s	 sectoracok
-	bra.s	 doblocksend 
-wasread
-	bsr		readsectors
-	cmp.l	 #0,d0					 ;error?
-	bne.s	 doblocksend
-sectoracok
-	add.l	 d5,d6					 ;next block number
-	sub.l	 d5,d7
-	bne.s	 domore
-	move.l	#0,d0
-
-doblocksend:
-	;movem.l  (sp)+,d4-d7/a5
-	cmp.l	 #0,d0
-	rts
-
 readsectors ;d4 is the number of sectors to read (between 1 and 64)
-	cmp.l	 #0,d0;error?
-	bne		rsfl
-	move.l	d6,d0					 ;logical block number
-	;bsr		issueread
-
-issueread
 	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
 	bge.s	 issueLBAread
 
 issueCHSread
 	bsr		getCHS
-	move.l	d6,d0
+	move.l	d6,d0 ;logical block number
 	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
 	moveq   #0,d0
 	move.b	mdu_UnitNum(a3),d0
-	;lsl.b	 #4,d0
 	or.b	  d2,d0
-	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	bra.s	 sendreadcommand
 
 issueLBAread
-	move.l	d6,d0							 ;restore d0	
+	move.l	d6,d0 ;logical block number
 	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_LBA_LOW_BYTE		  ;lba bits 0..7
 	lsr.l	 #8,d0
@@ -180,8 +168,6 @@ issueLBAread
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;lba bits 16..23
 	moveq   #0,d2
 	move.b	mdu_UnitNum(a3),d2
-	;lsl.b	 #4,d2
-	;add.b	 #L,d2
 	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
 	and.l	 #$0000000f,d0					
 	or.l	  d0,d2
@@ -191,27 +177,20 @@ sendreadcommand
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
 	sub.l	 #1,d4				 ;for dbne
 readnextblk
-	;DLY400NS							 ;wait for BSY go high (400 ns)
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	WAITNOTBSY D2,D3
 	beq		rsfl
 	WAITDRQ	D2,D3
 	beq.s	 rsfl
-;	move.l	#127,d0
-;	move.l	#TF_DATA,a0
-;readnextblkdata
-;	move.l	(a0),(a5)+
-;	dbra	  d0,readnextblkdata
 	RATADATAA5_512_BYTES
-	DLY5US								;wait DRQ go 0
-	dbne	  d4,readnextblk
+	;DLY5US								;wait DRQ go 0
 	;check for errors
 	WAITNOTBSY D2,D3
 	beq.s	 rsfl
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	and.l	 #DWF+ERR,d0
-	cmp.l	 #0,d0
-	bne.s	 rsfl
+	btst	  #ERR_BIT,d0
+	bne.s	  rsfl
+	dbne	  d4,readnextblk
 	move.l	#0,d0					 ;return value 0 means OK
 	rts
 rsfl									  ;some error in reading
@@ -219,9 +198,6 @@ rsfl									  ;some error in reading
 	rts
 
 writesectors ;d4 is the number of sectors to write (between 1 and 64)
-	;cmp.l	 #0,d0
-	;bne		wekfha
-	move.l	d6,d0 ;logical block number
 
 issuewrite
 	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
@@ -229,21 +205,19 @@ issuewrite
 
 issueCHSwrite
 	bsr		getCHS
-	move.l	d6,d0
+	move.l	d6,d0 ;logical block number
 	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
 	moveq   #0,d0
 	move.b	mdu_UnitNum(a3),d0
-	;lsl.b	 #4,d0
 	or.b	  d2,d0
-	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	bra.s	 sendwritecommand
 
 issueLBAwrite
-	move.l	d6,d0							 ;restore d0
+	move.l	d6,d0 ;logical block number
 	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA  bits  0..7
 	lsr.l	 #8,d0
@@ -252,8 +226,6 @@ issueLBAwrite
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
 	moveq   #0,d2
 	move.b	mdu_UnitNum(a3),d2
-	;lsl.b	 #4,d2
-	;add.b	 #L,d2
 	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
 	and.l	 #$0000000f,d0					
 	or.l	  d0,d2
@@ -265,24 +237,19 @@ sendwritecommand:
 
 	sub.l	 #1,d4				 ;for dbne	
 writenextoneblockki
-	WAITDRQ	D2,D3
-	beq.s	 wekfha
-;	move.l	#127,d0
-;	move.l	#TF_DATA,a0
-;writenextoneblockdata
-;	move.l	(a5)+,(a0)
-;	dbra	  d0,writenextoneblockdata
-	WATADATAA5_512_BYTES  
-	DLY5US								;BSY will go high within 5 microseconds after filling buffer
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	;check for errors
 	WAITNOTBSY D2,D3
 	beq.s		wekfha
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	and.l	 #DWF+ERR,d0
-	cmp.l	 #0,d0
-	bne.s	 wekfha
+	btst	  #ERR_BIT,d0
+	bne.s	  wekfha
+	WAITDRQ	D2,D3
+	beq.s	 wekfha
+	WATADATAA5_512_BYTES  
+	;DLY5US								;BSY will go high within 5 microseconds after filling buffer
 	dbne	  d4,writenextoneblockki
+	move.l	#0,d0
 	rts									;d0==0	ok
 wekfha
 	move.l	#1,d0
@@ -313,9 +280,6 @@ getCHS		;convert block number to Cylinder / Head / Sector numbers
 waitreadytoacceptnewcommand:
 	movem.l  d1-d2,-(sp)
 	move.l	#LOOP,d1
-;	cmp.w	 #TRUE,mdu_motor(a3)
-;	beq		fovc
-;	move.l	#LOOP2,d1
 fovc
 	WAITNOTBSY D0,D2
 	beq.s	 wre1
@@ -323,19 +287,18 @@ fovc
 	and.b	 #BSY+DRDY+DWF+ERR,d0
 	cmp.b	 #DRDY,d0
 	bne.s	 oiuy
-	move.l	#0,d0
-	movem.l  (sp)+,d1-d2
-	rts
+	move.l #0,d0
+	bra.s  wre2  
 oiuy
 	DLY5US	; make a processor speed independent minimum delay
 	and.b	 #DWF+ERR,d0
+	
 	dbne	  d1,fovc
 wre1
-	movem.l  (sp)+,d1-d2
 	move.l	#-865,d0
+wre2
+	movem.l  (sp)+,d1-d2
 	rts
-
-
 
   Public ATARdWtLen
 ATARdWtLen = *-ATARdWt
@@ -426,10 +389,7 @@ Packet
 	beq		pretec
 	WAITNOTDRQ D0,D6
 	beq		pretec
-	;lsl.b	 #4,d2
-	;or.b	  #$a0,d2
 	WATABYTE d2,TF_DRIVE_HEAD			  ;set task file registers
-	;DLY400NS
 	WATABYTE #0,TF_SECTOR_COUNT
 	WATABYTE d1,TF_CYLINDER_LOW
 	lsr.w	 #8,d1
@@ -510,30 +470,21 @@ pa8
 	; read data from drive
 	move.l	d3,d0
 	btst	  #1,d0											; is the data long alligned?							 
-	;and.l	 #63,d0							; is the data 64byte alligned?
 	beq.s	 pa8a
-	;move.l	d3,d0							 ; restore d0
 	RATADATAA5_D0_BYTES
 	bra		pa3
 pa8a 
-	;move.l	d3,d0							 ; restore d0
 	RATADATAA5_D0_BYTES_LONG
-	;RATADATAA5_D0_BYTES_64
 	bra		pa3
 pa9												; write data to drive
 	move.l	d3,d0
 	btst	  #1,d0											; is the data long alligned?							 
-	;and.l	 #63,d0							; is the data 64byte alligned?
 	beq.s		 pa9a
-	;move.l	d3,d0							 ; restore d0
 	WATADATAA5_D0_BYTES
 	bra		pa3
 pa9a
-	;move.l	d3,d0							 ; restore d0
 	WATADATAA5_D0_BYTES_LONG
-	;WATADATAA5_D0_BYTES_64
 	bra		pa3
-;
 pa10
 	WAITNOTBSY D1,D6
 	beq.s	 pretec
@@ -542,7 +493,6 @@ pa10
 	and.b	 #ERR,d1						  ;test, if error occured
 	bne.s	 pa_err
 pa11
-;	WAITNOTBSY d0,d6
 	movem.l  (sp)+,a0-a4/d0-d6
 	rts											;return from Packet
 

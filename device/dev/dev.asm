@@ -390,7 +390,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	;move.b   d2,d0                   ;unit number
 	cmp.b    #0,d2
 	beq.s    initunit0
-	bset.b   #SLAVE_BIT,d0                 ;set slave bit	
+	bset.b   #MDUB_SLAVE,d0                 ;set slave bit	
 initunit0	
 	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
 	move.l   a6,mdu_Device(a3)       ;initialize device pointer
@@ -412,7 +412,7 @@ initunit0
 	move.l   a0,mdu_tcb+TC_SPREG(a3)
 	lea	     mdu_tcb(a3),a0
 	move.l   a0,MP_SIGTASK(a3)
-	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)
+	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)
 	bne.s    no_name_change
 	lea	     myTaskName2(pc),a0
 	move.l   a0,mdu_tcb+LN_NAME(a3)
@@ -437,7 +437,7 @@ no_name_change:
 	
 	;------ mark us as ready to go
 	moveq.l  #0,d0
-	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)                   ;test unit number
+	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
 	beq.s    InitUnit_setUnitAdress
 	moveq.l  #4,d0                   ;set offset for unit 1 (slave)
 InitUnit_setUnitAdress:
@@ -477,7 +477,7 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    bsr	   FreeUnit
 
    ;------ clear out the unit vector in the device
-   btst.b  #SLAVE_BIT,d2
+   btst.b  #MDUB_SLAVE,d2
    bne.s   ExpungeUnit_Slave
    moveq.l  #0,d2
    bra.s   ExpungeUnit_ClearUnit
@@ -591,15 +591,12 @@ BeginIO_NoCmd:
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 	move.l   a2,-(sp)
 	move.l   a1,a2
-;  move.b   mdu_UnitNum(a3),d0 ;XXXXXX d0 next 2.nd line!!
 	clr.b    IO_ERROR(a2)         ;No error so far
 	move.w   IO_COMMAND(a2),d0
 	lsl      #2,d0                ;Multiply by 4 to get table offset
 	lea      cmdtable(pc),a0
 	move.l   0(a0,d0.w),a0
-
 	jsr      (a0) ; JSR TO THE ADDRESS WE READ FROM THE CMD TABLE
-
 	move.l   (sp)+,a2
 	rts
 
@@ -658,8 +655,6 @@ MyMotor:                               ;park drive heads and stop motor
 	beq      mtr1
 	moveq    #0,d0
 	move.b   mdu_UnitNum(a3),d0
-	;lsl.b    #4,d0
-	;or.b     #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY5US
 	WATABYTE #ATA_RECALIBRATE,TF_COMMAND
@@ -741,18 +736,14 @@ scsi_r6                             ; Read(6) packet
 	mulu     #512,d0
 	move.l   d0,-(sp)
 	move.l   scsi_Data(a6),a0
-	moveq    #0,d2
-	move.b   mdu_UnitNum(a3),d2
 	clr.b    scsi_Status(a6)
 	move.w   IO_COMMAND(a1),-(sp)
 	move.w   #CMD_READ,IO_COMMAND(a1)
 	move.l   a1,a2
-	;jsr      ATARdWt
 	move.l   a1,-(sp)
 	move.l   mdu_ATARdWt(a3),a1
   jsr      (a1)
 	move.l   (sp)+,a1
-	;jsr      ATARdWt
 	move.w   (sp)+,IO_COMMAND(a1)
 	move.l   (sp)+,scsi_Actual(a6)
 	tst.b    d0
@@ -801,7 +792,6 @@ scsi_cap                               ; Read Recorded Capacity packet
 	cmp.w    #CHS_ACCESS,mdu_lba(a3)
 	beq 		chscapa
 	move.l   mdu_numlba(a3),d0
-;   subq.l		#1,d0												; one less to avoid offset problems!
 ;   cmp.w    #LBA28_ACCESS,mdu_lba(a3)
 ;   beq 		setcapa
 ;   move.l   mdu_numlba48(a3),d1
@@ -933,9 +923,6 @@ drwf
 	bne      Sec_Error
 
 	move.l   d0,IO_ACTUAL(a1)   ;high offset is allready saved to d5
-	moveq    #0,d2
-	move.b   mdu_UnitNum(a3),d2
-	;jsr      ATARdWt
 	move.l   a1,-(sp)
 	move.l   mdu_ATARdWt(a3),a1
   jsr      (a1)

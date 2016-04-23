@@ -1,9 +1,11 @@
 MYPROCSTACKSIZE   EQU   $1000
 MYPROCPRI   EQU   5
+MYPRI   EQU   5
+
 
 	include "/debug/debug-wrapper.i"
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
 
 	DEVINIT
@@ -83,24 +85,6 @@ MD_NUMUNITS EQU   $2
 	STRUCT   mdu_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
 	LABEL    MyDevUnit_Sizeof
 
-;drive types
-ATA_DRV     equ   0
-ATAPI_DRV   equ   1
-UNKNOWN_DRV equ   2
-SATA_DRV     equ  3
-SATAPI_DRV   equ  4
-
-;access types
-CHS_ACCESS equ 0
-LBA28_ACCESS equ 1
-LBA48_ACCESS equ 2
-
-SLAVE_BIT equ 4
-
-	;------ state bit for unit stopped
-	BITDEF   MDU,STOPPED,2
-
-MYPRI   EQU   5
 
 ;NAMES etc.
 

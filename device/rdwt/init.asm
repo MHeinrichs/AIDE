@@ -38,8 +38,6 @@ InitDrive   ;a3 = unitptr
 	bsr      SelectDrive
 	bne			wfc1a														 ;no drive present!
 	move.b   mdu_UnitNum(a3),d0
-	;bsr      FindDrive	
-	 ;bne			wfc1														 ;no drive present!
 ;get memory
 	moveq    #0,d4 ;d4 holds the buffer for now on
 	move.l   ABSEXECBASE,a0
@@ -136,7 +134,6 @@ wfc2
 	RATABYTE TF_STATUS,d0               ;clear interrupt line
 	move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
 	add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
-	;or.b	   #$A0,mdu_UnitNum(a3)    ;set bit 7 and 5
 	clr.l    mdu_sectors_per_track(a3)
 	clr.l    mdu_heads(a3)
 	clr.l    mdu_cylinders(a3)
@@ -212,10 +209,8 @@ noeritd     ; ATA disk /SATA disk
 	move.w   1*2(a5),d0           ;Word 1 Number of logical cylinders
 	move.l   d0,mdu_cylinders(a3) ;store to internal buffer
 	move.w   6*2(a5),d0           ;Word 6 Default Translation sectors
-	;and.l    #$ffff,d0
 	move.l   d0,mdu_sectors_per_track(a3)  ;store to internal buffer
 	move.w   3*2(a5),d0           ;Word 3 Default Translation Mode number of heads
-	;and.l    #$ffff,d0
 	move.l   d0,mdu_heads(a3)     ;store to internal buffer
 	move.b	#1,mdu_SectorBuffer(a3)
 	move.w   47*2(A5),d0          ;WRITE/READ Multiple capabilities
@@ -310,20 +305,20 @@ setupata
 
 ;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
 ;   bge			kr2
-	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
-	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
-	move.l   mdu_heads(a3),d0           ;LBA support
-	subq.b   #1,d0
+;	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
+;	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
+;	move.l   mdu_heads(a3),d0           ;LBA support
+;	subq.b   #1,d0
 	;or.b     mdu_UnitNum(a3),d0
-	btst.b   #SLAVE_BIT,mdu_UnitNum(a3)
-	beq      pis1
-	bset     #SLAVE_BIT,d0
-pis1
-	WATABYTE d0,TF_DRIVE_HEAD
-	DLY400NS
-	bsr      waitreadytoacceptnewcommand
-	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-	WAITNOTBSY d1,d2
+;	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)
+;	beq      pis1
+;	bset     #MDUB_SLAVE,d0
+;pis1
+;	WATABYTE d0,TF_DRIVE_HEAD
+;	DLY400NS
+;	bsr      waitreadytoacceptnewcommand
+;	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
+;	WAITNOTBSY d1,d2
 kr2
 	move.l   d4,d1 ;is there a pointer in buffer?
 	tst.l    d1
@@ -364,8 +359,6 @@ rstwait2:
 SelectDrive:
 	moveq   #0,d0
 	move.b	mdu_UnitNum(a3),d0
-	;lsl.b	  #4,d0
-	;or.b	  #$a0,d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY400NS ;Other sources suggest 5 times TF_STATUS read instead a 400ns wait
 	;RATABYTE	TF_STATUS,d0				; clear interrupt line

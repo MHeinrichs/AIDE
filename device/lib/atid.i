@@ -28,6 +28,43 @@ TF_DEVICE_CONTROL   equ TF_ALTERNATE_STATUS
 TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
 
 
+LOOPPAUSE  equ   512      ; value for pause loop
+LOOP  equ   300000      ; timeout value for ATA - motor is on
+LOOP2 equ   5120000     ; timeout value for ATA - motor is off
+LOOP3 equ   512000       ; timeout value for ATAPI
+TESTBYTE1 equ $B0
+TESTBYTE2 equ $0B
+TESTBYTE3 equ $51
+TIMEOUT   equ $45
+;some of the 32-bit longword error codes rdwt.asm returns:
+BADLENGTH   equ "PELI"
+BADUNIT     equ "MELA"
+BADOFFSET   equ "TISI"
+NOREADWRITE equ "PILU"
+TRUE  equ   1
+FALSE equ   0
+
+;drive types
+ATA_DRV     equ   0
+ATAPI_DRV   equ   1
+UNKNOWN_DRV equ   2
+SATA_DRV     equ  3
+SATAPI_DRV   equ  4
+
+;access types
+CHS_ACCESS equ 0
+LBA28_ACCESS equ 1
+LBA48_ACCESS equ 2
+
+MAX_TRANSFER equ 256 ;256 for now!
+
+	;------ state bit for unit stopped
+	BITDEF   MDU,STOPPED,2 
+	;------ state bit for slave unit
+	BITDEF   MDU,SLAVE,4 
+
+
+
 
 ;accesses to ATA-registers are done with macros
 ;this is for future development of parallel port IDE-interface
@@ -44,58 +81,54 @@ WATAWORD macro
    move.w \1,\2
  endm
 
-LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   256000      ; timeout value for ATA - motor is on
-LOOP2 equ   5120000     ; timeout value for ATA - motor is off
-LOOP3 equ   512000       ; timeout value for ATAPI
-TESTBYTE1 equ $B0
-TESTBYTE2 equ $0B
-TESTBYTE3 equ $51
-TIMEOUT   equ $45
-;some of the 32-bit longword error codes rdwt.asm returns:
-BADLENGTH   equ "PELI"
-BADUNIT     equ "MELA"
-BADOFFSET   equ "TISI"
-NOREADWRITE equ "PILU"
-TRUE  equ   1
-FALSE equ   0
-
 WAITNOTDRQ macro
    move.l   #LOOP,\2
-wqd\@ DLY3US
-   subq.l   #1,\2
-   beq      wqd1\@
+wqd\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #DRQ,\1
-   bne      wqd\@
+   beq.s    wqd1\@
+   dbra			\2,wqd\@   
 wqd1\@
    tst.l    \2
  endm
 
 WAITNOTBSY macro
    move.l   #LOOP,\2
-wn\@ DLY3US
-   subq.l   #1,\2
-   beq      wn1\@
+wn\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #BSY,\1
-   bne      wn\@
+   beq.s    wn1\@
+   dbra     \2,wn\@
 wn1\@
    tst.l    \2
  endm
 
 WAITDRQ macro
    move.l   #LOOP,\2
-wd\@ DLY3US
-   subq.l   #1,\2
-   beq      wd1\@
+wd\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #BSY+DRQ,\1
    cmp.b    #DRQ,\1
-   bne      wd\@
+   beq.s    wd1\@
+   dbra     \2,wd\@
 wd1\@
    tst.l    \2
  endm
+
+WAITREADYFORNEWCOMMAND macro
+	move.l	#2*LOOP,\2               ;double time because we wait for bsy to go low and DRDY to go up
+wrfc\@
+  RATABYTE TF_ALTERNATE_STATUS,\1
+	and.b	 #BSY+DRDY+DWF+ERR,d0
+	cmp.b	 #DRDY,d0
+	beq.s	 wrfc1\@
+  dbra     \2,wrfc\@
+wrfc1\@
+   tst.l    \2
+ endm
+
+
+
 
 ;read macros
 RATADATAA5_D0_BYTES_LONG macro

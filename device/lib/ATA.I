@@ -36,6 +36,20 @@ CORR equ    bit2 ;corrected data
 IDX  equ    bit1 ;index
 ERR  equ    bit0 ;error
 
+
+;bit positions
+BSY_BIT  equ    7 ;Busy
+DRDY_BIT equ    6 ;drive ready
+DWF_BIT  equ    5 ;drive write fault
+DF_BIT   equ    DWF_BIT
+DSC_BIT  equ    4 ;drive seek complete
+SKC_BIT  equ    DSC_BIT
+DRQ_BIT  equ    3 ;data request
+CORR_BIT equ    2 ;corrected data
+IDX_BIT  equ    1 ;index
+ERR_BIT  equ    0 ;error
+
+
 ;device control register
                  ;bit3 always 1
 SRST  equ   bit2 ;software reset
