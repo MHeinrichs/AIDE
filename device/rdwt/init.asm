@@ -316,7 +316,7 @@ setupata
 ;pis1
 ;	WATABYTE d0,TF_DRIVE_HEAD
 ;	DLY400NS
-;	bsr      waitreadytoacceptnewcommand
+;	WAITREADYFORNEWCOMMAND
 ;	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
 ;	WAITNOTBSY d1,d2
 kr2
@@ -341,13 +341,13 @@ kr21:
 ResetIDE
 	movem.l  d0,-(sp)
 	WATABYTE #8+nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	moveq.l	 #16,d0 ;wait 
+	move.l	 #16000,d0 ;wait 
 rstwait1:
 	DLY5US
 	dbne		d0,rstwait1
 	;release reset
 	WATABYTE #8+nIEN,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	moveq.l	 #120,d0 ;wait 200ms
+	move.l	 #120000,d0 ;wait 200ms
 rstwait2:
 	tst.b	 $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
 	dbne		d0,rstwait2
@@ -371,32 +371,6 @@ SelectDrive:
 sdr4
 	move.l	#0,d0					 ; clear zero flag
 	rts	
-
-
-waitreadytoacceptnewcommand:
-	movem.l  d1-d2,-(sp)
-	move.l	#LOOP,d1
-;	cmp.w	 #TRUE,mdu_motor(a3)
-;	beq		fovc
-;	move.l	#LOOP2,d1
-fovc
-	WAITNOTBSY D0,D2
-	beq.s	 wre1
-	RATABYTE TF_STATUS,d0
-	and.b	 #BSY+DRDY+DWF+ERR,d0
-	cmp.b	 #DRDY,d0
-	bne.s	 oiuy
-	move.l	#0,d0
-	movem.l  (sp)+,d1-d2
-	rts
-oiuy
-	DLY5US	; make a processor speed independent minimum delay
-	and.b	 #DWF+ERR,d0
-	dbne	  d1,fovc
-wre1
-	movem.l  (sp)+,d1-d2
-	move.l	#-865,d0
-	rts
 	
 	cnop  0,4
 CP3044txt   dc.b  'CP3044 ',0    ; 8 bytes = 2 longwords ->alligned!

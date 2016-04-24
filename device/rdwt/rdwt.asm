@@ -74,7 +74,7 @@ ATARdWt:
 	;cmp.w	 #LBA48_ACCESS,mdu_lba(a3) ;is it a LBA48 drive, this should be able to handle 32bit addresses ;)?		
 	;beq	transfer		  ;everything is ok!
 	and.l	#$F0000000,d4	  ; just the first 28 bits set?
-	bne.s	Quits			  ; nope: Quit!
+	bne 	Quits			  ; nope: Quit!
 transfer
 	move.l	a0,a5				 ;Start address
 	move.l	d1,d6				 ;Start block
@@ -105,89 +105,104 @@ between1andMax
 	move.l d5,d4					 ;d5 is number of sectors in this round
 	and.l	 #$FF,d4				  ; 256 sectors = 00
 maskd4done	
-	;WAITREADYFORNEWCOMMAND D1,D3
-	bsr		 waitreadytoacceptnewcommand
-	bsr    setupdrive
+	WAITREADYFORNEWCOMMAND D0,D1
+	bsr    setupdrive ;this routine destroys d0-d3
 	cmp.l	 #READOPE,a2
-	beq.s	 wasread
-	bsr		 writesectors			;Format or Write
-	bra.s	 checkresult 
-wasread
-	bsr		 readsectors
-checkresult
-	cmp.l	 #0,d0					 ;error?
-	bne.s	 Quits
-sectoracok
-	add.l	 d5,d6					 ;next block number
-	sub.l	 d5,d7
-	bne.s	 domore
-	move.l #0,d0
-	
-Quits
-	cmp.l	#0,d0
-	bne.s	errcode
-okcode
-	movem.l	(sp)+,d1-d7/a0-a6
-	rts								;EXIT RDWT.ASM
-errcode
-	cmp.w	#ATAPI_DRV,mdu_drv_type(a3)
-	beq.s	errcodeend
-	cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
-	beq.s	errcodeend
-	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
-	jsr	  ResetIDE
-errcodeend
-	move.l	#1,d0
-	bra.s	okcode
+	beq 	 wasread
 
-readsectors ;d4 is the number of sectors to read (between 1 and MAX_TRANSFER)
+	;Format or Write
+;	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
+;	sub.l	 #1,d4				 ;for dbne	
+;writenextoneblockki
+;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+;	;check for errors
+;	bsr     errorcheck
+;	bne  	  errcode
+;	WAITDRQ	D2,D3
+;	beq     errcode
+;	WATADATAA5_512_BYTES  
+;	dbne	  d4,writenextoneblockki
+;;check for a write error in the last block
+;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+;	bsr     errorcheck
+;	bne  	  errcode
+
+  WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
+	sub.l	 #1,d4				 ;for dbne	
+writenextoneblockki
+	WAITDRQ	D2,D3
+	beq     errcode
+	WATADATAA5_512_BYTES  
+	DLY5US								;BSY will go high within 5 microseconds after filling buffer
+	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+	;check for errors
+	WAITNOTBSY D2,D3
+	beq  		errcode
+	RATABYTE TF_ALTERNATE_STATUS,d0
+	and.l	  #DWF+ERR,d0
+	cmp.l	  #0,d0
+	bne  	  errcode
+	dbne	  d4,writenextoneblockki
+	bra  	  sectoracok 
+
+wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
 	sub.l	 #1,d4				 ;for dbne
 readnextblk
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	WAITNOTBSY D2,D3
-	beq		rsfl
+	beq		  errcode
 	WAITDRQ	D2,D3
-	beq.s	 rsfl
+	beq 	  errcode
 	RATADATAA5_512_BYTES
 	;check for errors
-	WAITNOTBSY D2,D3
-	beq.s	 rsfl
-	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #ERR_BIT,d0
-	bne.s	  rsfl
+	bsr     errorcheck
+	bne 	  errcode
 	dbne	  d4,readnextblk
-	move.l	#0,d0					 ;return value 0 means OK
-	rts
-rsfl									  ;some error in reading
-	move.l	#1,d0
-	rts
 
-writesectors ;d4 is the number of sectors to write (between 1 and MAX_TRANSFER)
-	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
-	sub.l	 #1,d4				 ;for dbne	
-writenextoneblockki
-	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	;check for errors
+sectoracok
+	add.l	 d5,d6					 ;next block number
+	sub.l	 d5,d7
+	bne 	 domore
+	move.l #0,d0
+
+Quits
+	cmp.l	#0,d0
+	bne.s	errcode	
+okcode
+	movem.l	(sp)+,d1-d7/a0-a6
+	rts								;EXIT RDWT.ASM
+errcode
+	;cmp.w	#ATAPI_DRV,mdu_drv_type(a3)
+	;beq.s	errcodeend
+	;cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
+	;beq.s	errcodeend
+	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
+	;jsr	  ResetIDE
+errcodeend
+	move.l	#1,d0
+	bra.s	okcode
+
+;this routine checks for errors and returns 0 in d0 if no error occured
+errorcheck
 	WAITNOTBSY D2,D3
-	beq.s		wekfha
+	beq.s		erroroccured
 	RATABYTE TF_ALTERNATE_STATUS,d0
 	btst	  #ERR_BIT,d0
-	bne.s	  wekfha
-	WAITDRQ	D2,D3
-	beq.s	 wekfha
-	WATADATAA5_512_BYTES  
-	dbne	  d4,writenextoneblockki
-	move.l	#0,d0
-	rts									;d0==0	ok
-wekfha
-	move.l	#1,d0
-	rts									;some error in writing
-	
+	bne.s	  erroroccured
+	move.l  #0,d0
+  rts
+erroroccured:
+  move.l #1,d0
+  rts
+
+;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d3 on the way
 setupdrive:
+	WATABYTE d4,TF_SECTOR_COUNT
 	move.l	d6,d0 ;logical block number
 	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
 	bge 	 issueLBA
+
 	;chs
   ;convert block number to Cylinder / Head / Sector numbers
 	move.l	d0,d3				 ;d0 = number of block (block numbers begin from 0)
@@ -209,7 +224,6 @@ setupdrive:
 	lsr.l	 #8,d1
 	and.l	 #$ff,d1			  ;cylinder high
 	move.l	d6,d0 ;logical block number
-	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
@@ -220,47 +234,21 @@ setupdrive:
 	bra.s	 setupdriveend
 
 issueLBA;
-	WATABYTE d4,TF_SECTOR_COUNT
 	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA  bits  0..7
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_MID_BYTE			;LBA  bits  8..15
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
+	lsr.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
+	and.l	 #$0000000f,d0					
 	moveq   #0,d2
 	move.b	mdu_UnitNum(a3),d2
-	rol.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
-	and.l	 #$0000000f,d0					
 	or.l	  d0,d2
 	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba; lba bits 24..27
 setupdriveend:
 	move.l	d6,d0							 ;restore d0
   rts
-
-
-;ugly colde duplication but otherwise i whould have a slow rom routine in the main IO-path 
-waitreadytoacceptnewcommand:
-	movem.l  d1-d2,-(sp)
-	move.l	#LOOP,d1
-fovc
-	WAITNOTBSY D0,D2
-	beq.s	 wre1
-	RATABYTE TF_STATUS,d0
-	and.b	 #BSY+DRDY+DWF+ERR,d0
-	cmp.b	 #DRDY,d0
-	bne.s	 oiuy
-	move.l #0,d0
-	bra.s  wre2  
-oiuy
-	DLY5US	; make a processor speed independent minimum delay
-	and.b	 #DWF+ERR,d0
-	
-	dbne	  d1,fovc
-wre1
-	move.l	#-865,d0
-wre2
-	movem.l  (sp)+,d1-d2
-	rts
-
+  
   Public ATARdWtLen
 ATARdWtLen = *-ATARdWt
 	

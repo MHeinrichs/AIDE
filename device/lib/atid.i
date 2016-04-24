@@ -56,7 +56,7 @@ CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
 
-MAX_TRANSFER equ 256 ;256 for now!
+MAX_TRANSFER equ 128 ;256 for now!
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2 
@@ -118,13 +118,13 @@ wd1\@
 WAITREADYFORNEWCOMMAND macro
 	move.l	#2*LOOP,\2               ;double time because we wait for bsy to go low and DRDY to go up
 wrfc\@
-  RATABYTE TF_ALTERNATE_STATUS,\1
-	and.b	 #BSY+DRDY+DWF+ERR,d0
-	cmp.b	 #DRDY,d0
+  RATABYTE TF_STATUS,\1
+	and.b	 #BSY+DRDY+DWF+ERR,\1
+	cmp.b	 #DRDY,\1
 	beq.s	 wrfc1\@
   dbra     \2,wrfc\@
 wrfc1\@
-   tst.l    \2
+  tst.l    \2
  endm
 
 
