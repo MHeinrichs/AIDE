@@ -56,7 +56,7 @@ CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
 
-MAX_TRANSFER equ 128 ;256 for now!
+MAX_TRANSFER equ 256 ;256 for now!
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2 

@@ -128,37 +128,33 @@ maskd4done
 ;	bne  	  errcode
 
   WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
-	sub.l	 #1,d4				 ;for dbne	
-writenextoneblockki
-	WAITDRQ	D2,D3
-	beq     errcode
-	WATADATAA5_512_BYTES  
-	DLY5US								;BSY will go high within 5 microseconds after filling buffer
-	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	;check for errors
-	WAITNOTBSY D2,D3
-	beq  		errcode
-	RATABYTE TF_ALTERNATE_STATUS,d0
-	and.l	  #DWF+ERR,d0
-	cmp.l	  #0,d0
-	bne  	  errcode
-	dbne	  d4,writenextoneblockki
-	bra  	  sectoracok 
-
+  bra.s   do_command
 wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
-	sub.l	 #1,d4				 ;for dbne
-readnextblk
+  
+do_command:  
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	WAITNOTBSY D2,D3
-	beq		  errcode
+	sub.l	 #1,d4				 ;for dbne	
+nextoneblock
 	WAITDRQ	D2,D3
-	beq 	  errcode
-	RATADATAA5_512_BYTES
+	beq     errcode
+
+	cmp.l	  #READOPE,a2
+	beq.s   read_block
+
+	WATADATAA5_512_BYTES 
+	bra.s  checkerrorforthisblock
+
+read_block:
+	RATADATAA5_512_BYTES	
+
+checkerrorforthisblock:
+	;DLY5US								;BSY will go high within 5 microseconds after filling buffer
+	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	;check for errors
 	bsr     errorcheck
-	bne 	  errcode
-	dbne	  d4,readnextblk
+	bne  	  errcode
+	dbne	  d4,nextoneblock
 
 sectoracok
 	add.l	 d5,d6					 ;next block number
@@ -178,7 +174,7 @@ errcode
 	;cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
 	;beq.s	errcodeend
 	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
-	;jsr	  ResetIDE
+	jsr	  ResetIDE
 errcodeend
 	move.l	#1,d0
 	bra.s	okcode
