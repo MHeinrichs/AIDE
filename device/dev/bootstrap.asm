@@ -129,7 +129,7 @@ initRoutine:
 	bsr ResetIDE
 	;get structure for a mem-pointer-package
 	move.l  #MyMemPkt_Sizeof,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     end_dealloc
@@ -139,7 +139,7 @@ initRoutine:
 	
 	; Get 512 bytes of memory for sector buffer
 	move.l  #BLOCKSIZE,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
@@ -147,7 +147,7 @@ initRoutine:
 
 	; Get 512 bytes of memory for rdb buffer
 	move.l  #BLOCKSIZE,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
@@ -155,7 +155,7 @@ initRoutine:
 
 	; get mem for parameter packet
 	move.l  #MyParmPkt_Sizeof,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
@@ -164,7 +164,7 @@ initRoutine:
 	   
 	; get mem for io handler
 	move.l  #IOSTD_SIZE,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
@@ -317,7 +317,7 @@ copy_param_packet:
 	;restore buffers
 	move.l buffermem(a5),a0 
 	move.l parametermem(a5),a3
-	move.l #MEMF_ANY,pp_BufferMemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
+	move.l #MEMF_PUBLIC,pp_BufferMemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
 	IFGE	DEBUG_DETAIL-2
 	bsr print_param_packet  
 	ENDC
@@ -446,7 +446,7 @@ open_device:
 	bne     unit_allready_there
 	;PRINTF  1,<'Opening unit',13,10>
 	move.l  #MyDevUnit_Sizeof,d0
-	move.l  #MEMF_ANY+MEMF_CLEAR,d1
+	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     open_error;

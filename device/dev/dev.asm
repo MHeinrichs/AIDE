@@ -162,15 +162,15 @@ init1
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
   PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
-  cmp.l  #$600000,a0
-  blt.s  relocate_atardwt
-  cmp.l  #$A00000,a0
-  bgt.s  relocate_atardwt
-  bra.s  end_relocate ;already in the right piece of fastram!
+  ;cmp.l  #$600000,a0
+  ;blt.s  relocate_atardwt
+  ;cmp.l  #$A00000,a0
+  ;bgt.s  relocate_atardwt
+  ;bra.s  end_relocate ;already in the right piece of fastram!
 relocate_atardwt  
 	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
   lea    ATARdWt,a0
-	moveq  #MEMF_PUBLIC,d1
+	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1
   CALLSYS AllocMem
   tst.l  d0
   beq.s  end_relocate
@@ -373,7 +373,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
 	;------ allocate unit memory
 	move.l   #MyDevUnit_Sizeof,d0
-	move.l   #MEMF_ANY!MEMF_CLEAR,d1
+	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
 	LINKSYS  AllocMem,md_SysLib(a6)
 	tst.l    d0
 	beq      InitUnit_End

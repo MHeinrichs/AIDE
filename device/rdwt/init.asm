@@ -42,7 +42,7 @@ InitDrive   ;a3 = unitptr
 	moveq    #0,d4 ;d4 holds the buffer for now on
 	move.l   ABSEXECBASE,a0
 	move.l   #512,d0       ; we want 512 bytes for a buffer   
-	move.l   #MEMF_ANY!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
+	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1 ;Preferable Fast mem, cleared   
 	LINKSYS  AllocMem,a0
 	tst.l    d0             ; memory ok?
 	beq      wfc1
