@@ -43,7 +43,6 @@
 	XREF  InitDrive     ;Drive initialisation routine
 	XREF  SCSIDirectCmd ;SCSI direct command routine
 	XREF  blink         ;Routine that blinks the power LED
-	XREF  pause         ;Pause routine
 	XREF  ResetIDE
 	
 	XLIB  AddIntServer ;XLIB macro: XLIB Something => XREF _LVOSomething

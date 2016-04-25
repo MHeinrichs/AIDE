@@ -123,10 +123,10 @@ nextoneblock
 	beq     errcode
 	cmp.l	  #READOPE,a2
 	beq.s   read_block
-	WATADATAA5_512_BYTES ;destroys d0/d1
+	WATADATAA5_512_BYTES ;destroys d0
 	bra.s  checkerrorforthisblock
 read_block:
-	RATADATAA5_512_BYTES	;destroys d0/d1
+	RATADATAA5_512_BYTES	;destroys d0
 checkerrorforthisblock:
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	and.l   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
@@ -349,7 +349,7 @@ pa4
 	beq		pretec
 	bsr		pause
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #7,d0
+	btst	  #BSY_BIT,d0
 	bne.s	 pa4
 	RATABYTE TF_SECTOR_COUNT,d1
 	and.b	 #3,d1
@@ -364,7 +364,7 @@ pa5
 	bne.s	 pa4
 pa6
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #7,d0
+	btst	  #BSY_BIT,d0
 	bne.s	 pa4
 	RATABYTE TF_STATUS,d0
 	and.b	 #DRQ,d0
