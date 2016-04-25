@@ -56,7 +56,7 @@ CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
 
-MAX_TRANSFER equ 64 
+MAX_TRANSFER equ 16 
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2 
@@ -85,7 +85,7 @@ WAITNOTDRQ macro
    move.l   #LOOP,\2
 wqd\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
-   and.b    #DRQ,\1
+   and.l    #DRQ,\1
    beq.s    wqd1\@
    dbra			\2,wqd\@   
 wqd1\@
@@ -96,7 +96,7 @@ WAITNOTBSY macro
    move.l   #LOOP,\2
 wn\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
-   and.b    #BSY,\1
+   and.l    #BSY,\1
    beq.s    wn1\@
    dbra     \2,wn\@
 wn1\@
@@ -107,8 +107,8 @@ WAITDRQ macro
    move.l   #LOOP,\2
 wd\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
-   and.b    #BSY+DRQ,\1
-   cmp.b    #DRQ,\1
+   and.l    #BSY+DRQ,\1
+   cmp.l    #DRQ,\1
    beq.s    wd1\@
    dbra     \2,wd\@
 wd1\@
@@ -118,9 +118,9 @@ wd1\@
 WAITREADYFORNEWCOMMAND macro
 	move.l	#2*LOOP,\2               ;double time because we wait for bsy to go low and DRDY to go up
 wrfc\@
-  RATABYTE TF_STATUS,\1
-	and.b	 #BSY+DRDY+DWF+ERR,\1
-	cmp.b	 #DRDY,\1
+  RATABYTE TF_ALTERNATE_STATUS,\1
+	and.l	 #BSY+DRDY+DWF+ERR,\1
+	cmp.l	 #DRDY,\1
 	beq.s	 wrfc1\@
   dbra     \2,wrfc\@
 wrfc1\@
@@ -144,9 +144,9 @@ gre2\@
 ;read macros
 RATADATAA5_512_BYTES macro
 	move.l   #TF_DATA,a0
-	move.l	a5,d0			is this byte-aligned?
-	btst.b	#0,d0
-	bne.s	byte_write\@
+;	move.l	a5,d0			is this byte-aligned?
+;	btst.b	#0,d0
+;	bne.s	byte_write\@
 	;d0 must be < $0002000
 	moveq.l  #7,d0       ;bytes to long and loop unrolling: 8 times -1 for dbra
 gre3\@
@@ -167,21 +167,23 @@ gre3\@
 	move.l   (a0),(a5)+
 	move.l   (a0),(a5)+
 	dbra     d0,gre3\@
-	bra endgre3\@
-byte_write\@
-	moveq	#128-1,d0		;2 words =128 longs
-gre4\@		
-	move.w	(a0),d1			;get one word
-	swap	d1						;put it in the upper half of d1
-	move.w	(a0),d1			;get second word
-	move.b	d1,3(a5)		;low byte to low long
-	lsr.l	#8,d1         ;shift by 8 
-	move.w	d1,1(a5)		;two middle byte
-	swap	d1						;swap it back
-	move.b	d1,(a5)			;high byte to the right place
-	addq.w	#4,a5       ;inc adress
-	dbra	d0,gre4\@
-endgre3\@
+;	bra endgre3\@
+;byte_write\@
+;	moveq	#128-1,d0		;2 words =128 longs
+;gre4\@		
+;	move.w	(a0),d1			;get one word
+;	swap	d1						;put it in the upper half of d1
+;	move.w	(a0),d1			;get second word
+;	move.b	d1,3(a5)		;low byte to low long
+;	lsr.l	#8,d1         ;shift by 8 
+;	move.b	d1,2(a5)		; byte two
+;	lsr.l	#8,d1         ;shift by 8 
+;	move.b	d1,1(a5)		;byte three
+;	lsr.l	#8,d1         ;shift by 8 
+;	move.b	d1,(a5)			;byte four to the right place
+;	addq.w	#4,a5       ;inc adress
+;	dbra	d0,gre4\@
+;endgre3\@
   endm
 
 ;read macros
@@ -259,9 +261,9 @@ cva2\@
 ;write macros
 WATADATAA5_512_BYTES macro
 	move.l   #TF_DATA,a0
-	move.l	a5,d0			is this byte-aligned?
-	btst.b	#0,d0
-	bne.s	byte_write\@	
+;	move.l	a5,d0			is this byte-aligned?
+;	btst.b	#0,d0
+;	bne.s	byte_write\@	
 	moveq.l  #7,d0     ;bytes to long and loop unrolling: 8 times -1 for dbra
 cva3\@
 	move.l   (a5)+,(a0)
@@ -281,23 +283,25 @@ cva3\@
 	move.l   (a5)+,(a0)
 	move.l   (a5)+,(a0)
 	dbra     d0,cva3\@
-	bra			 endcva3\@
-byte_write\@
-	moveq	#128-1,d0				;2 words =128 longs
-		
-cva4\@
-	move.b		(a5),d1    ;first byte from buffer
-	swap			d1				 ;swap to upper half (read byte is now at pos 3
-	move.w		1(a5),d1	 ;read two middle bytes
-	lsl.l			#8,d1      ;bput pos 1-3 to 2-4
-	move.b		3(a5),d1   ;read pos 1
-	swap			d1         ;first write3-4
-	move.w		d1,(a0)		 ;word write could be long?!?
-	swap			d1         ;pos 1-2
-	move.w		d1,(a0)    ;2nd word
-	addq.w		#4,a5      :inc address
-	dbra			d0,cva4\@	
-endcva3
+;	bra			 endcva3\@
+;byte_write\@
+;	moveq	#128-1,d0				;2 words =128 longs
+;		
+;cva4\@
+;	move.b		(a5),d1    ;first byte from buffer
+;	lsl.l			#8,d1      ;put pos 1 to pos 2
+;	move.b		1(a5),d1	 ;read pos two
+;	lsl.l			#8,d1      ;put pos 1-2 to 2-3
+;	move.b		2(a5),d1	 ;read pos two
+;	lsl.l			#8,d1      ;put pos 1-3 to 2-4
+;	move.b		3(a5),d1   ;read pos 1
+;	swap			d1         ;first write3-4
+;	move.w		d1,(a0)		 ;word write could be long?!?
+;	swap			d1         ;pos 1-2
+;	move.w		d1,(a0)    ;2nd word
+;	addq.w		#4,a5      :inc address
+;	dbra			d0,cva4\@	
+;endcva3\@
 	endm
 
 

@@ -108,89 +108,34 @@ maskd4done
 	WAITREADYFORNEWCOMMAND D0,D1
 	bsr    setupdrive ;this routine destroys d0-d3
 	cmp.l	 #READOPE,a2
-  beq.s	 wasread
-	bsr		writesectors			;Format or Write
-	cmp.l	 #0,d0					 ;Error?
-	beq.s	 sectoracok
-	bra.s	 Quits 
-wasread
-	bsr		readsectors
-	cmp.l	 #0,d0					 ;error?
-	bne.s	 Quits
-sectoracok
-	add.l	 d5,d6					 ;next block number
-	sub.l	 d5,d7
-	bne.s	 domore
-	move.l	#0,d0
-	
-Quits
-	cmp.l	#0,d0
-	bne.s	errcode
-okcode
-	movem.l	(sp)+,d1-d7/a0-a6
-	rts								;EXIT RDWT.ASM
-errcode
-	cmp.w	#ATAPI_DRV,mdu_drv_type(a3)
-	beq.s	errcodeend
-	cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
-	beq.s	errcodeend
-	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
-	jsr	  ResetIDE
-errcodeend
-	move.l	#1,d0
-	bra.s	okcode
-
-
 	beq 	 wasread
-
 	;Format or Write
-;	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
-;	sub.l	 #1,d4				 ;for dbne	
-;writenextoneblockki
-;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-;	;check for errors
-;	bsr     errorcheck
-;	bne  	  errcode
-;	WAITDRQ	D2,D3
-;	beq     errcode
-;	WATADATAA5_512_BYTES  
-;	dbne	  d4,writenextoneblockki
-;;check for a write error in the last block
-;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-;	bsr     errorcheck
-;	bne  	  errcode
-
   WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
   bra.s   do_command
 wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
-  
+
 do_command:  
 	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
 	WAITDRQ	D2,D3
 	beq     errcode
-
 	cmp.l	  #READOPE,a2
 	beq.s   read_block
-
 	WATADATAA5_512_BYTES ;destroys d0/d1
 	bra.s  checkerrorforthisblock
-
 read_block:
 	RATADATAA5_512_BYTES	;destroys d0/d1
-
 checkerrorforthisblock:
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	and.l   #ERR+BSY,d0       ;everything fine (not Bsy and no error)?
+	and.l   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
 	beq.s   looptonextblock
 	;check for not busy and then for errors
 	bsr     errorcheck
 	bne  	  errcode
 looptonextblock	
 	dbne	  d4,nextoneblock
-
 sectoracok
 	add.l	 d5,d6					 ;next block number
 	sub.l	 d5,d7
@@ -214,65 +159,15 @@ errcodeend
 	move.l	#1,d0
 	bra.s	okcode
 
-
-;readsectors
-;	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
-;	sub.l	 #1,d4				 ;for dbne
-;readnextblk
-;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-;	WAITNOTBSY D2,D3
-;	beq		rsfl
-;	WAITDRQ	D2,D3
-;	beq.s	 rsfl
-;	RATADATAA5_512_BYTES
-;	;DLY5US								;wait DRQ go 0
-;	;check for errors
-;	WAITNOTBSY D2,D3
-;	beq.s	 rsfl
-;	RATABYTE TF_ALTERNATE_STATUS,d0
-;	btst	  #ERR_BIT,d0
-;	bne.s	  rsfl
-;	dbne	  d4,readnextblk
-;	move.l	#0,d0					 ;return value 0 means OK
-;	rts
-;rsfl									  ;some error in reading
-;	move.l	#1,d0
-;	rts
-;
-;writesectors ;d4 is the number of sectors to write (between 1 and 64)
-;	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
-;
-;	sub.l	 #1,d4				 ;for dbne	
-;writenextoneblockki
-;	WAITDRQ	D2,D3
-;	beq.s	 wekfha
-;;	move.l	#127,d0
-;;	move.l	#TF_DATA,a0
-;;writenextoneblockdata
-;;	move.l	(a5)+,(a0)
-;;	dbra	  d0,writenextoneblockdata
-;	WATADATAA5_512_BYTES  
-;	DLY5US								;BSY will go high within 5 microseconds after filling buffer
-;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-;	;check for errors
-;	WAITNOTBSY D2,D3
-;	beq.s		wekfha
-;	RATABYTE TF_ALTERNATE_STATUS,d0
-;	and.l	 #DWF+ERR,d0
-;	cmp.l	 #0,d0
-;	bne.s	 wekfha
-;	dbne	  d4,writenextoneblockki
-;	rts									;d0==0	ok
-;wekfha
-;	move.l	#1,d0
-;	rts				
-
 ;this routine checks for errors and returns 0 in d0 if no error occured
 errorcheck
 	WAITNOTBSY D2,D3
 	beq.s		erroroccured
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	and.l	  #ERR,d0 ;leave everything except the Errorbit ->if set this function returns 1
+	and.l	  #ERR+DWF,d0 ;leave everything except the Errorbits ->if set this function returns not null
+  rts
+erroroccured:
+  move.l #1,d0
   rts
 
 ;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d3 on the way
@@ -298,11 +193,10 @@ setupdrive:
 	move.l	d0,d2
 	swap	  d2
 	and.l	 #$f,d2				;d2 = head
-	move.l	d0,d1
-	and.l	 #$ff,d0			  ;cylinder low
-	lsr.l	 #8,d1
-	and.l	 #$ff,d1			  ;cylinder high
-	move.l	d6,d0 ;logical block number
+	move.l	d0,d1				;d0=cylinder low
+	lsr.l	 #8,d1				;d1=cylinder high
+	;and.l	 #$ff,d0			  
+	;and.l	 #$ff,d1			  
 	WATABYTE d0,TF_CYLINDER_LOW
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE d3,TF_SECTOR_NUMBER
@@ -319,13 +213,12 @@ issueLBA;
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
 	lsr.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
-	and.l	 #$0000000f,d0					
+	and.l	 #$f,d0					
 	moveq   #0,d2
 	move.b	mdu_UnitNum(a3),d2
 	or.l	  d0,d2
 	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba; lba bits 24..27
 setupdriveend:
-	move.l	d6,d0							 ;restore d0
   rts
   
   Public ATARdWtLen
