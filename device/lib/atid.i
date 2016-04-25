@@ -1,4 +1,4 @@
-   ;INCLUDE "IDE_BASE_ADDRESS.i"
+	;INCLUDE "IDE_BASE_ADDRESS.i"
    include "/new-version/IDE_BASE_ADDRESS.i" ;The base adress for the ide-driver
 TF  equ  IDE_BASE_ADDRESS+$1000+$2000; Task File base address + 3000hex
 CS0      equ  -$1000    ;Amiga A12 line is connected to ATA /CS0
@@ -56,7 +56,7 @@ CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
 
-MAX_TRANSFER equ 256 ;256 for now!
+MAX_TRANSFER equ 64 
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2 
@@ -143,27 +143,45 @@ gre2\@
 
 ;read macros
 RATADATAA5_512_BYTES macro
-   move.l   #TF_DATA,a0
-   ;d0 must be < $0002000
-   moveq.l  #7,d0       ;bytes to long and loop unrolling: 8 times -1 for dbra
+	move.l   #TF_DATA,a0
+	move.l	a5,d0			is this byte-aligned?
+	btst.b	#0,d0
+	bne.s	byte_write\@
+	;d0 must be < $0002000
+	moveq.l  #7,d0       ;bytes to long and loop unrolling: 8 times -1 for dbra
 gre3\@
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   move.l   (a0),(a5)+
-   dbra     d0,gre3\@
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	move.l   (a0),(a5)+
+	dbra     d0,gre3\@
+	bra endgre3\@
+byte_write\@
+	moveq	#128-1,d0		;2 words =128 longs
+gre4\@		
+	move.w	(a0),d1			;get one word
+	swap	d1						;put it in the upper half of d1
+	move.w	(a0),d1			;get second word
+	move.b	d1,3(a5)		;low byte to low long
+	lsr.l	#8,d1         ;shift by 8 
+	move.w	d1,1(a5)		;two middle byte
+	swap	d1						;swap it back
+	move.b	d1,(a5)			;high byte to the right place
+	addq.w	#4,a5       ;inc adress
+	dbra	d0,gre4\@
+endgre3\@
   endm
 
 ;read macros
@@ -215,52 +233,72 @@ cva2\@
 
 ;write macros
 WATADATAA5_D0_BYTES_64 macro
-   move.l   #TF_DATA,a0
-   lsr.l    #8,d0;bytes to long and loop unrolling: 8 times
-   sub.l    #1,d0
+	move.l   #TF_DATA,a0
+	lsr.l    #8,d0;bytes to long and loop unrolling: 8 times
+	sub.l    #1,d0
 cva2\@
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   dbra     d0,cva2\@
- endm
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	dbra     d0,cva2\@
+	endm
 
 ;write macros
 WATADATAA5_512_BYTES macro
-   move.l   #TF_DATA,a0
-   moveq.l  #7,d0     ;bytes to long and loop unrolling: 8 times -1 for dbra
+	move.l   #TF_DATA,a0
+	move.l	a5,d0			is this byte-aligned?
+	btst.b	#0,d0
+	bne.s	byte_write\@	
+	moveq.l  #7,d0     ;bytes to long and loop unrolling: 8 times -1 for dbra
 cva3\@
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   move.l   (a5)+,(a0)
-   dbra     d0,cva3\@
- endm
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	move.l   (a5)+,(a0)
+	dbra     d0,cva3\@
+	bra			 endcva3\@
+byte_write\@
+	moveq	#128-1,d0				;2 words =128 longs
+		
+cva4\@
+	move.b		(a5),d1    ;first byte from buffer
+	swap			d1				 ;swap to upper half (read byte is now at pos 3
+	move.w		1(a5),d1	 ;read two middle bytes
+	lsl.l			#8,d1      ;bput pos 1-3 to 2-4
+	move.b		3(a5),d1   ;read pos 1
+	swap			d1         ;first write3-4
+	move.w		d1,(a0)		 ;word write could be long?!?
+	swap			d1         ;pos 1-2
+	move.w		d1,(a0)    ;2nd word
+	addq.w		#4,a5      :inc address
+	dbra			d0,cva4\@	
+endcva3
+	endm
 
 
 

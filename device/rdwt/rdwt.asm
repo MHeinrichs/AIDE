@@ -108,6 +108,39 @@ maskd4done
 	WAITREADYFORNEWCOMMAND D0,D1
 	bsr    setupdrive ;this routine destroys d0-d3
 	cmp.l	 #READOPE,a2
+  beq.s	 wasread
+	bsr		writesectors			;Format or Write
+	cmp.l	 #0,d0					 ;Error?
+	beq.s	 sectoracok
+	bra.s	 Quits 
+wasread
+	bsr		readsectors
+	cmp.l	 #0,d0					 ;error?
+	bne.s	 Quits
+sectoracok
+	add.l	 d5,d6					 ;next block number
+	sub.l	 d5,d7
+	bne.s	 domore
+	move.l	#0,d0
+	
+Quits
+	cmp.l	#0,d0
+	bne.s	errcode
+okcode
+	movem.l	(sp)+,d1-d7/a0-a6
+	rts								;EXIT RDWT.ASM
+errcode
+	cmp.w	#ATAPI_DRV,mdu_drv_type(a3)
+	beq.s	errcodeend
+	cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
+	beq.s	errcodeend
+	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
+	jsr	  ResetIDE
+errcodeend
+	move.l	#1,d0
+	bra.s	okcode
+
+
 	beq 	 wasread
 
 	;Format or Write
@@ -133,7 +166,7 @@ wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
   
 do_command:  
-	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
 	WAITDRQ	D2,D3
@@ -142,18 +175,20 @@ nextoneblock
 	cmp.l	  #READOPE,a2
 	beq.s   read_block
 
-	WATADATAA5_512_BYTES 
+	WATADATAA5_512_BYTES ;destroys d0/d1
 	bra.s  checkerrorforthisblock
 
 read_block:
-	RATADATAA5_512_BYTES	
+	RATADATAA5_512_BYTES	;destroys d0/d1
 
 checkerrorforthisblock:
-	;DLY5US								;BSY will go high within 5 microseconds after filling buffer
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	;check for errors
+	and.l   #ERR+BSY,d0       ;everything fine (not Bsy and no error)?
+	beq.s   looptonextblock
+	;check for not busy and then for errors
 	bsr     errorcheck
 	bne  	  errcode
+looptonextblock	
 	dbne	  d4,nextoneblock
 
 sectoracok
@@ -179,17 +214,65 @@ errcodeend
 	move.l	#1,d0
 	bra.s	okcode
 
+
+;readsectors
+;	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
+;	sub.l	 #1,d4				 ;for dbne
+;readnextblk
+;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+;	WAITNOTBSY D2,D3
+;	beq		rsfl
+;	WAITDRQ	D2,D3
+;	beq.s	 rsfl
+;	RATADATAA5_512_BYTES
+;	;DLY5US								;wait DRQ go 0
+;	;check for errors
+;	WAITNOTBSY D2,D3
+;	beq.s	 rsfl
+;	RATABYTE TF_ALTERNATE_STATUS,d0
+;	btst	  #ERR_BIT,d0
+;	bne.s	  rsfl
+;	dbne	  d4,readnextblk
+;	move.l	#0,d0					 ;return value 0 means OK
+;	rts
+;rsfl									  ;some error in reading
+;	move.l	#1,d0
+;	rts
+;
+;writesectors ;d4 is the number of sectors to write (between 1 and 64)
+;	WATABYTE #ATA_WRITE_SECTORS,TF_COMMAND
+;
+;	sub.l	 #1,d4				 ;for dbne	
+;writenextoneblockki
+;	WAITDRQ	D2,D3
+;	beq.s	 wekfha
+;;	move.l	#127,d0
+;;	move.l	#TF_DATA,a0
+;;writenextoneblockdata
+;;	move.l	(a5)+,(a0)
+;;	dbra	  d0,writenextoneblockdata
+;	WATADATAA5_512_BYTES  
+;	DLY5US								;BSY will go high within 5 microseconds after filling buffer
+;	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
+;	;check for errors
+;	WAITNOTBSY D2,D3
+;	beq.s		wekfha
+;	RATABYTE TF_ALTERNATE_STATUS,d0
+;	and.l	 #DWF+ERR,d0
+;	cmp.l	 #0,d0
+;	bne.s	 wekfha
+;	dbne	  d4,writenextoneblockki
+;	rts									;d0==0	ok
+;wekfha
+;	move.l	#1,d0
+;	rts				
+
 ;this routine checks for errors and returns 0 in d0 if no error occured
 errorcheck
 	WAITNOTBSY D2,D3
 	beq.s		erroroccured
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #ERR_BIT,d0
-	bne.s	  erroroccured
-	move.l  #0,d0
-  rts
-erroroccured:
-  move.l #1,d0
+	and.l	  #ERR,d0 ;leave everything except the Errorbit ->if set this function returns 1
   rts
 
 ;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d3 on the way
