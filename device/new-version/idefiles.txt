@@ -1,0 +1,3 @@
+o\dev.o
+o\rdwt.o
+o\init.o

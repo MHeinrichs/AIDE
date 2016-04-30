@@ -1,0 +1,2 @@
+o\bootstrap.o
+o\init.o

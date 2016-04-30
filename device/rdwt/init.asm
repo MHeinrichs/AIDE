@@ -7,15 +7,15 @@
 	include "exec/io.i"
 	include "exec/tasks.i"
 	include "devices/scsidisk.i"
-	include "/lib/mydev.i"  ;select name etc, of the device
-	include "/lib/atid.i"   ;This include has the macros which
+	include "lib/mydev.i"  ;select name etc, of the device
+	include "lib/atid.i"   ;This include has the macros which
 	                        ;are used to access a particular
 	                        ;implementation of an Amiga to ATA 
 	                        ;hardware interface, such as an A500 
 	                        ;side slot interface or a Parallel port
 	                        ;interface.
-	include "/lib/ata.i"    ; defines ATA bits and commands
-	include "/lib/asmsupp.i"; Various helpers from Commodore
+	include "lib/ata.i"    ; defines ATA bits and commands
+	include "lib/asmsupp.i"; Various helpers from Commodore
 	
 	XLIB AllocMem
 	XLIB FreeMem

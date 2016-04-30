@@ -3,7 +3,7 @@ MYPROCPRI   EQU   10
 MYPRI   EQU   5
 
 
-	include "/debug/debug-wrapper.i"
+	include "debug/debug-wrapper.i"
 		IFND	DEBUG_DETAIL
 DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
 		ENDC
@@ -59,15 +59,15 @@ MD_NUMUNITS EQU   $2
 	ULONG    mdu_cylinders        ;only for ATA
 	ULONG    mdu_numlba           ;only for ATA with LBA=LBA24_ACCESS OR LBA48_ACCESS
 	ULONG    mdu_act_Actual       ;SCSI-Packet-Stuff
+	STRUCT   mdu_EmulInquiry,9*4
+	STRUCT   mdu_EmulMSPage3,7*4
+	STRUCT   mdu_EmulMSPage4,7*4
+	STRUCT   mdu_rs_cmd,6*2       
 	STRUCT   mdu_sense_data,20        ;data for sense scsi-packet
 	STRUCT   mdu_ser_num,24       ;serial number:20Chars + 1null byte +3pad
 	STRUCT   mdu_firm_rev,12      ;firware revision: 8 chars + 1 null byte +3pad
 	STRUCT   mdu_model_num,44     ;model number: 40 chars + 1 null byte +3 pad
 	STRUCT   mdu_act_cmd,16       ;actual SCSI-Command (8 words = 16 bytes)
-	STRUCT   mdu_EmulInquiry,9*4
-	STRUCT   mdu_EmulMSPage3,7*4
-	STRUCT   mdu_EmulMSPage4,7*4
-	STRUCT   mdu_rs_cmd,6*2       
 	UWORD    mdu_drv_type         ;see bellow for possible values
 	UWORD    mdu_lba              ;use LBA? For ATAPI always TRUE
 	UWORD    mdu_motor            ;motor status
@@ -102,11 +102,11 @@ MYTASKNAME2   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.29 (06.04.2016)",13,10,0
+	   dc.b    "IDE.Device 2.30 (30.04.2016)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 29
+REVISION equ 30
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

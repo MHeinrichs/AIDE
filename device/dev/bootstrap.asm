@@ -1,4 +1,4 @@
-	SECTION   section
+	SECTION   driver,CODE
 	include "exec/types.i"
 	include "exec/nodes.i"
 	include "exec/lists.i"
@@ -22,17 +22,17 @@
 	;Note that the next ASSIGNs ending with : need to be assigned
 	;outside of this assembly source file, eg. in compilation scripts.
 	;These are AmigaDos "links" to some certain file.
-	include "/lib/asmsupp.i";Various helper macros made by Commodore
-	include "/lib/mydev.i"  ;select name etc, of the device
-	;include "/lib/myscsi.i" ;
-	include "/lib/ata.i"    ;ATA commands and other ATA codes
-	include "/lib/atid.i"   ;This include has the macros which
+	include "lib/asmsupp.i";Various helper macros made by Commodore
+	include "lib/mydev.i"  ;select name etc, of the device
+	;include "lib/myscsi.i" ;
+	include "lib/ata.i"    ;ATA commands and other ATA codes
+	include "lib/atid.i"   ;This include has the macros which
 	      ;are used to access a particular
 	      ;implementation of an Amiga to ATA 
 	      ;hardware interface, such as an A500 
 	      ;side slot interface or a Parallel port
 	      ;interface.
-	include "/lib/bootinfo.i";Structure for boot infos
+	include "lib/bootinfo.i";Structure for boot infos
 
 	XLIB	AllocMem
 	XLIB	FreeMem
@@ -257,7 +257,7 @@ find_the_drive:
 
 search_rdb:
 	cmp.l  #MAX_BLOCK_SEARCH_RDB,d4
-	bge.l  next_unit  ;nothing found!
+	bge    next_unit  ;nothing found!
 	move.l rdbmem(a5),a0
 	PRINTF 1,<'Searching for rdb at block %ld, offset %lx',13,10>,d4,d0
 	bsr    read_block
@@ -338,7 +338,7 @@ copy_param_packet:
 	;put the DeviceNode from mem in A0
 	move.l   devicenode(a5),a0 
 	move.l   #0,a1
-	btst.l   #PBFB_BOOTABLE,pp_flags+3(a3)
+	btst     #PBFB_BOOTABLE,pp_flags+3(a3)
 	beq      add_node   ; no boot flag
 	;load the ConfigDev in a1
 	move.l  configdev(a5),a1

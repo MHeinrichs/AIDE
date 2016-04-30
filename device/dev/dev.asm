@@ -22,16 +22,16 @@
 	;Note that the next ASSIGNs ending with : need to be assigned
 	;outside of this assembly source file, eg. in compilation scripts.
 	;These are AmigaDos "links" to some certain file.
-	include "/lib/asmsupp.i";Various helper macros made by Commodore
-	include "/lib/ata.i"    ;ATA commands and other ATA codes
-	include "/lib/mydev.i"  ;select name etc, of the device
-	include "/lib/atid.i"   ;This include has the macros which
+	include "lib/asmsupp.i";Various helper macros made by Commodore
+	include "lib/ata.i"    ;ATA commands and other ATA codes
+	include "lib/mydev.i"  ;select name etc, of the device
+	include "lib/atid.i"   ;This include has the macros which
 	                        ;are used to access a particular
 	                        ;implementation of an Amiga to ATA 
 	                        ;hardware interface, such as an A500 
 	                        ;side slot interface or a Parallel port
 	                        ;interface.
-	include "/lib/bootinfo.i"  ;select name etc, of the device
+	;include "lib/bootinfo.i"  ;select name etc, of the device
 	
 	;include "lib/myscsi.i" ;
 
@@ -42,7 +42,7 @@
 	XREF  ATARdWtLen
 	XREF  InitDrive     ;Drive initialisation routine
 	XREF  SCSIDirectCmd ;SCSI direct command routine
-	XREF  blink         ;Routine that blinks the power LED
+	;XREF  blink         ;Routine that blinks the power LED
 	XREF  ResetIDE
 	
 	XLIB  AddIntServer ;XLIB macro: XLIB Something => XREF _LVOSomething
@@ -95,7 +95,7 @@ initDDescrip:
 	            ;STRUCTURE RT,0
 	  DC.W    RTC_MATCHWORD    ; UWORD RT_MATCHWORD
 	  DC.L    initDDescrip     ; APTR  RT_MATCHTAG
-	  DC.L    EndCode          ; APTR  RT_ENDSKIP
+	  DC.L    EndCodeDev       ; APTR  RT_ENDSKIP
 	  DC.B    RTF_AUTOINIT     ; UBYTE RT_FLAGS
 	  DC.B    VERSION          ; UBYTE RT_VERSION
 	  DC.B    NT_DEVICE        ; UBYTE RT_TYPE
@@ -389,7 +389,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	;move.b   d2,d0                   ;unit number
 	cmp.b    #0,d2
 	beq.s    initunit0
-	bset.b   #MDUB_SLAVE,d0                 ;set slave bit	
+	bset     #MDUB_SLAVE,d0                 ;set slave bit	
 initunit0	
 	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
 	move.l   a6,mdu_Device(a3)       ;initialize device pointer
@@ -436,7 +436,7 @@ no_name_change:
 	
 	;------ mark us as ready to go
 	moveq.l  #0,d0
-	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
+	btst     #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
 	beq.s    InitUnit_setUnitAdress
 	moveq.l  #4,d0                   ;set offset for unit 1 (slave)
 InitUnit_setUnitAdress:
@@ -476,7 +476,7 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    bsr	   FreeUnit
 
    ;------ clear out the unit vector in the device
-   btst.b  #MDUB_SLAVE,d2
+   btst    #MDUB_SLAVE,d2
    bne.s   ExpungeUnit_Slave
    moveq.l  #0,d2
    bra.s   ExpungeUnit_ClearUnit
@@ -989,9 +989,9 @@ Flush_End:
 	move.l   d2,d0
 	movem.l  (sp)+,d2/a1/a6       ; TM simul bug
 	tst.b    d0
-	beq.s    1$
+	beq.s    Flush_term
 	bsr      InternalStart
-1$:
+Flush_term:
 ;  move.l   a2,a1                ; TM simul bug
 	bsr      TermIO
 	rts
@@ -1113,17 +1113,17 @@ mdu_Init:
 	INITLONG mdu_numlba48,0
 	INITLONG mdu_no_disk,0
 	INITLONG mdu_change_cnt,FALSE
-	INITSTRUCT 0,mdu_EmulInquiry,,8
+	INITSTRUCT 0,mdu_EmulInquiry,0,8
 	DC.L		 $00000001
 	DC.L		 $1F000000
 	DC.L		 $4944452D
 	DC.L		 $454D554C
-	DC.L		 $20202020
-	DC.L		 $20202020
-	DC.L		 $20202020
-	DC.L		 $20202020
-	DC.L		 $312E3030
-	INITSTRUCT 0,mdu_EmulMSPage3,,6
+	DC.L		 $20312e30
+	DC.L		 $30000000
+	DC.L		 $00000000
+	DC.L		 $00000000
+	DC.L		 $00000000
+	INITSTRUCT 0,mdu_EmulMSPage3,0,6
 	DC.L		 $1B000000
 	DC.L		 $03160000
 	DC.L		 $00000000
@@ -1131,7 +1131,7 @@ mdu_Init:
 	DC.L		 $02000000
 	DC.L		 $00000000
 	DC.L		 $80000000
-	INITSTRUCT 0,mdu_EmulMSPage4,,6
+	INITSTRUCT 0,mdu_EmulMSPage4,0,6
 	DC.L		 $1B000000
 	DC.L		 $04160000
 	DC.L		 $00000000
@@ -1139,14 +1139,14 @@ mdu_Init:
 	DC.L		 $00000000
 	DC.L		 $00000000
 	DC.L		 $0E100000
-	INITSTRUCT 1,mdu_rs_cmd,,5
-	DC.L		 $0300
-	DC.L		 $0000
-	DC.L		 $2000
-	DC.L		 $0000
-	DC.L		 $0000
-	DC.L		 $0000
+	INITSTRUCT 1,mdu_rs_cmd,0,5
+	DC.W		 $0300
+	DC.W		 $0000
+	DC.W		 $2000
+	DC.W		 $0000
+	DC.W		 $0000
+	DC.W		 $0000
 	DC.W     0
 
-EndCode:
+EndCodeDev:
 	END         ;TM

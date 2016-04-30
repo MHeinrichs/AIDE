@@ -1,5 +1,5 @@
 	;INCLUDE "IDE_BASE_ADDRESS.i"
-   include "/new-version/IDE_BASE_ADDRESS.i" ;The base adress for the ide-driver
+   include "new-version/IDE_BASE_ADDRESS.i" ;The base adress for the ide-driver
 TF  equ  IDE_BASE_ADDRESS+$1000+$2000; Task File base address + 3000hex
 CS0      equ  -$1000    ;Amiga A12 line is connected to ATA /CS0
 CS1      equ  -$2000    ;Amiga A13 line is connected to ATA /CS1
@@ -23,6 +23,7 @@ TF_DRIVE_HEAD     equ   (Y+TF+$6*REG_INC+CS0)
 TF_STATUS         equ   (Y+TF+$7*REG_INC+CS0)
 TF_COMMAND        equ   (Y+TF+$7*REG_INC+CS0)
 ;control block registers
+;TF_ALTERNATE_STATUS equ TF_STATUS
 TF_ALTERNATE_STATUS equ (Y+TF+$6*REG_INC+CS1)
 TF_DEVICE_CONTROL   equ TF_ALTERNATE_STATUS
 TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
