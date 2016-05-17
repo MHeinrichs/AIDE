@@ -1,5 +1,6 @@
 @set ASM_INCLUDE="..\..\..\NDK_3.1\INCLUDES_LIBS\INCLUDE_I"
-
+del o\*.o
+del *.device
 vasm -quiet -Fhunk -I.. -I%ASM_INCLUDE% -ldots -nosym -opt-speed -o o\dev.o ..\dev\dev.asm
 vasm -quiet -Fhunk -I.. -I%ASM_INCLUDE% -ldots -nosym -opt-speed -o o\rdwt.o ..\rdwt\rdwt.asm
 vasm -quiet -Fhunk -I.. -I%ASM_INCLUDE% -ldots -nosym -opt-speed -o o\bootstrap.o ..\dev\bootstrap.asm

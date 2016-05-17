@@ -161,14 +161,13 @@ init1
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
   PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
-  ;cmp.l  #$600000,a0
-  ;blt.s  relocate_atardwt
-  ;cmp.l  #$A00000,a0
-  ;bgt.s  relocate_atardwt
-  ;bra.s  end_relocate ;already in the right piece of fastram!
+  cmp.l  #$600000,a0
+  blt.s  relocate_atardwt
+  cmp.l  #$A00000,a0
+  bgt.s  relocate_atardwt
+  bra.s  end_relocate ;already in the right piece of fastram!
 relocate_atardwt  
 	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-  lea    ATARdWt,a0
 	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1
   CALLSYS AllocMem
   tst.l  d0
@@ -235,8 +234,10 @@ Open_UnitOK:
 	cmp.b    #TRUE,mdu_firstcall(a3)
 	bne.s      nav1
 	bsr      InitDrive ;Call the IDE drive initialisation routine
-	move.w   mdu_drv_type(a3),d0  ;known drive type
-  PRINTF 1,<'Init drive ok, drivetype: %ld',13,10>,d0
+	IFGE	DEBUG_DETAIL-1
+		move.w   mdu_drv_type(a3),d0  ;known drive type
+  	PRINTF 1,<'Init drive ok, drivetype: %ld',13,10>,d0
+  ENDC
 	move.b   #FALSE,mdu_firstcall(a3)
 nav1
 	cmp.w    #UNKNOWN_DRV,mdu_drv_type(a3)  ;known drive type

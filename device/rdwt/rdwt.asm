@@ -116,7 +116,7 @@ wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
 
 do_command:  
-	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
+	;RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
 	WAITDRQ	D2,D3
@@ -305,7 +305,7 @@ sdc2
 Packet
 	movem.l  a0-a4/d0-d6,-(sp)
 	clr.l	 mdu_act_Actual(a3)
-	DLY400NS
+	;DLY400NS
 	WAITNOTBSY D0,D6					;wait till drive is not ready
 	beq		pretec
 	WAITNOTDRQ D0,D6
@@ -319,7 +319,7 @@ Packet
 	WAITNOTBSY D0,D6
 	beq		pretec
 	WATABYTE #ATA_PACKET,TF_COMMAND	  ;send packet command
-	DLY400NS
+	;DLY400NS
 	WAITDRQ  D0,D6
 	beq		pretec
 	RATABYTE TF_STATUS,d0
