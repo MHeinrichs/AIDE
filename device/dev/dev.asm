@@ -160,12 +160,12 @@ init1
   ;find the location of ATARdWt
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
-  PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
-  cmp.l  #$600000,a0
-  blt.s  relocate_atardwt
-  cmp.l  #$A00000,a0
-  bgt.s  relocate_atardwt
-  bra.s  end_relocate ;already in the right piece of fastram!
+;  PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
+;  cmp.l  #$600000,a0
+;  blt.s  relocate_atardwt
+;  cmp.l  #$A00000,a0
+;  bgt.s  relocate_atardwt
+;  bra.s  end_relocate ;already in the right piece of fastram!
 relocate_atardwt  
 	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
 	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1

@@ -109,7 +109,9 @@ endcopy:
 bootdevicename:
 	dc.b    'ide.device',0
 expname:    dc.b    'expansion.library',0
+	IFGE	BIND_MEM-1	
 mem_name:	dc.b "A1K_FastMEM",0
+	ENDC
 	cnop	0,4
 
 bootname:

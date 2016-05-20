@@ -228,7 +228,6 @@ multiple_sector_dis
 	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
 	beq      nolba                ;propably no lba support if no lba sectors
 	move.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
-	;add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
 	or.b     #$A0+L,mdu_UnitNum(a3);set the LBA-bit in the unit number
 	;move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
 	;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
