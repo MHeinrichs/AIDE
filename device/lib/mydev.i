@@ -102,11 +102,11 @@ MYTASKNAME2   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.30 (30.04.2016)",13,10,0
+	   dc.b    "IDE.Device 2.31 (17.05.2016)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 30
+REVISION equ 31
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

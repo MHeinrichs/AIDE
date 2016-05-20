@@ -126,7 +126,7 @@ initRoutine:
 	bsr addmem
 	ENDC
 	move.l  ABSEXECBASE,a6
-	bsr ResetIDE
+	;bsr ResetIDE
 	;get structure for a mem-pointer-package
 	move.l  #MyMemPkt_Sizeof,d0
 	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1

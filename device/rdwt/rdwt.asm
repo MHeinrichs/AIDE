@@ -116,7 +116,7 @@ wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
 
 do_command:  
-	;RATABYTE TF_STATUS,d0			;clears the disabled interrupt
+	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
 	WAITDRQ	D2,D3
@@ -154,7 +154,7 @@ errcode
 	;cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
 	;beq.s	errcodeend
 	;Reset drive - some drives may freeze at bad block but a reset resets the whole ide-chain!
-	jsr	  ResetIDE
+	;jsr	  ResetIDE
 errcodeend
 	move.l	#1,d0
 	bra.s	okcode
@@ -172,53 +172,58 @@ erroroccured:
 
 ;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d3 on the way
 setupdrive:
-	WATABYTE d4,TF_SECTOR_COUNT
+	WATABYTE d4,TF_SECTOR_COUNT     ;Both: Sectorcount
 	move.l	d6,d0 ;logical block number
-	cmp.w	 #LBA28_ACCESS,mdu_lba(a3)
-	bge 	 issueLBA
+	cmp.w	 #CHS_ACCESS,mdu_lba(a3)
+	bne 	 issueLBA
 
 	;chs
   ;convert block number to Cylinder / Head / Sector numbers
-	move.l	d0,d3				 ;d0 = number of block (block numbers begin from 0)
+	; Cyl go to D0
+	; Head to D2
+	; Sec to d1
+	
+	move.l	d0,d1				 ;d0 = number of block (block numbers begin from 0)
 	move.l	mdu_sectors_per_track(a3),d2
-	divu	  d2,d3
-	swap	  d3
-	add.w	 #1,d3				 ;sector numbers begin at 1
-	and.l	 #$ff,d3			  ;sector number byte
-	move.l	mdu_sectors_per_track(a3),d2	  ;d0 = number of block
-	divu	  d2,d0
-	and.l	 #$ffff,d0			;16bit word
+	divu	  d2,d1
+	move.l	d1,d0
+	swap	  d1
+	addq.w  #1,d1				 ;sector numbers begin at 1
+	and.l	  #$ff,d1			 ;sector number byte
+	;now the cylinder we copied the result of the division above to d0! 
+	and.l	  #$ffff,d0			;16bit word
 	move.l	mdu_heads(a3),d2
 	divu	  d2,d0				 ;d0 = cyl
 	move.l	d0,d2
-	swap	  d2
-	and.l	 #$f,d2				;d2 = head
-	move.l	d0,d1				;d0=cylinder low
-	lsr.l	 #8,d1				;d1=cylinder high
-	;and.l	 #$ff,d0			  
-	;and.l	 #$ff,d1			  
+	swap	  d2					 ;d2 = head
 	WATABYTE d0,TF_CYLINDER_LOW
-	WATABYTE d1,TF_CYLINDER_HIGH
-	WATABYTE d3,TF_SECTOR_NUMBER
-	moveq   #0,d0
-	move.b	mdu_UnitNum(a3),d0
-	or.b	  d2,d0
-	WATABYTE d0,TF_DRIVE_HEAD
+	lsr.l	 #8,d0
+	WATABYTE d0,TF_CYLINDER_HIGH
+	WATABYTE d1,TF_SECTOR_NUMBER
+
 	bra.s	 setupdriveend
 
 issueLBA;
-	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA  bits  0..7
+
+  ; d0 holds the LBA, but we have to convert it to:
+	; d0 = LOW /MidByte :LBA 0..15
+	; D1 = HIGH BYTE    :LBA 16..27
+	; d2= Head          :LBA 24..27+SLAVE-BIT+LBA-BIT
+	
+  move.l d0,d1       ; make a copy of d0
+  swap   d1          ; put the highlba (16..27) to the lower part
+  move.l d1,d2       ; make a copy in d2
+  lsr.l	 #8,d2       ; rotate LBA 16..23 away: D2 holds lba bitrs 24..27 now!
+	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA: bits  0..7  
 	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_MID_BYTE			;LBA  bits  8..15
-	lsr.l	 #8,d0
-	WATABYTE d0,TF_LBA_HIGH_BYTE		  ;LBA  bits  16..23
-	lsr.l	 #8,d0							 ;put upper 4 bits of d0 into lower 4bit of d2
-	and.l	 #$f,d0					
-	moveq   #0,d2
-	move.b	mdu_UnitNum(a3),d2
-	or.l	  d0,d2
-	WATABYTE d2,TF_DRIVE_HEAD			  ;L=lba; lba bits 24..27
+	WATABYTE d0,TF_LBA_MID_BYTE			;LBA: bits  8..15  
+	WATABYTE d1,TF_LBA_HIGH_BYTE		;LBA  bits  16..23 
+
 setupdriveend:
+	and.l	 #$f,d2      ; mask LBA: bits 24..27 / CHS: head count
+	or.b	 mdu_UnitNum(a3),d2 ; set slave and LBA-bit
+	; write head to the drive!
+	WATABYTE d2,TF_DRIVE_HEAD			  
   rts
   
   Public ATARdWtLen
@@ -305,7 +310,7 @@ sdc2
 Packet
 	movem.l  a0-a4/d0-d6,-(sp)
 	clr.l	 mdu_act_Actual(a3)
-	;DLY400NS
+	DLY400NS
 	WAITNOTBSY D0,D6					;wait till drive is not ready
 	beq		pretec
 	WAITNOTDRQ D0,D6
@@ -319,7 +324,7 @@ Packet
 	WAITNOTBSY D0,D6
 	beq		pretec
 	WATABYTE #ATA_PACKET,TF_COMMAND	  ;send packet command
-	;DLY400NS
+	DLY400NS
 	WAITDRQ  D0,D6
 	beq		pretec
 	RATABYTE TF_STATUS,d0
