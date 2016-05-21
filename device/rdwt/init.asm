@@ -169,32 +169,35 @@ lk    move.w   (a0),d1
 	   dbra     d0,lk
 	   movem.l  (sp)+,d1-d2 ;restore d1-d2
 	ENDC
-
+	;Sometimes we fall through here and still think this is a ATA-(Slave)Drive 
+	;but there is no drive! So do the following:
+	;Sanity check: the firmware,serial and model MUST only consist of ASCII-characters between $20 and $7E
+	;this check is done in the CopyString routine!
+ckl1
 	move.l   d4,a5   ;copy serial number to internal info buffer
 	add.l    #20,a5			
 	lea      mdu_ser_num(a3),a0
-	move.b   #10,d0				
-ckl1
-	move.w   (a5)+,(a0)+
-	subq.b	#1,d0
-	bne		ckl1
-	move.b   #0,(a0)				;null termination of string
+	move.b   #20,d0				
+	bsr      CopyString	
+	cmp.l    #0,d0
+	bne      wfc1	     ;Crapy ASCII: unknown drive!
+
 	move.l   d4,a5
 	add.l    #46,a5
-	lea      mdu_firm_rev(a3),a0  ;copy firm. revision to int. buffer 8byte = 2 longwords!
-	move.l   (a5)+,(a0)+
-	move.l   (a5)+,(a0)+
-	move.b   #0,(a0)              ;null termination of string
+	lea      mdu_firm_rev(a3),a0  ;copy firm. revision to int. buffer 8byte
+	move.b   #8,d0				
+	bsr      CopyString	
+	cmp.l    #0,d0
+	bne      wfc1	     ;Crapy ASCII: unknown drive!
+
 	move.l   d4,a5
-	add.l    #54,a5
-	lea      mdu_model_num(a3),a0 ;copy model number to int. buffer 40 bytes = 10 longwords
-	move.b   #10,d0				
-ckl3
-	move.l   (a5)+,(a0)+
-	subq.b	#1,d0
-	bne   	ckl3
-	move.b   #0,(a0)				;null termination of string
-	lea      mdu_model_num(a3),a0
+	add.l    #54,a5  ;here is the model number
+	lea      mdu_model_num(a3),a0 ;copy model number to int. buffer 40 bytes
+	move.b   #40,d0				
+	bsr      CopyString	
+	cmp.l    #0,d0
+	bne      wfc1	     ;Crapy ASCII: unknown drive!
+
 	moveq    #0,d0
 	move.w   mdu_drv_type(a3),d0
 	cmp.w    #ATA_DRV,mdu_drv_type(a3)
@@ -336,6 +339,27 @@ kr21:
 	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a2/a5
 	rts
 
+CopyString
+;A0: destination
+;A5: source
+;D0: maxlen
+loopcopy
+	cmp.b    #0,(a5)
+	;null termination is OK
+	beq      copyendgood
+	cmp.b    #$20,(a5)
+	blt      copyendbad	     ;Crapy ASCII: unknown drive!
+	cmp.b    #$7E,(a5)
+	bgt      copyendbad	     ;Crapy ASCII: unknown drive!	
+	move.b   (a5)+,(a0)+
+	subq.b	#1,d0
+	bne		loopcopy
+copyendgood
+	move.b   #0,(a0)				;null termination of string
+  moveq    #0,d0
+copyendbad
+  rts
+    
 	Public ResetIDE
 ;SoftwareReset IDE-BUS
 ResetIDE
