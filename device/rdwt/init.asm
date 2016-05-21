@@ -169,26 +169,23 @@ lk    move.w   (a0),d1
 	   dbra     d0,lk
 	   movem.l  (sp)+,d1-d2 ;restore d1-d2
 	ENDC
-	;Sometimes we fall through here and still think this is a ATA-(Slave)Drive 
-	;but there is no drive! So do the following:
-	;Sanity check: the firmware,serial and model MUST only consist of ASCII-characters between $20 and $7E
-	;this check is done in the CopyString routine!
-ckl1
+
 	move.l   d4,a5   ;copy serial number to internal info buffer
 	add.l    #20,a5			
 	lea      mdu_ser_num(a3),a0
 	move.b   #20,d0				
 	bsr      CopyString	
-	cmp.l    #0,d0
-	bne      wfc1	     ;Crapy ASCII: unknown drive!
 
 	move.l   d4,a5
 	add.l    #46,a5
 	lea      mdu_firm_rev(a3),a0  ;copy firm. revision to int. buffer 8byte
 	move.b   #8,d0				
 	bsr      CopyString	
-	cmp.l    #0,d0
-	bne      wfc1	     ;Crapy ASCII: unknown drive!
+
+	;Sometimes we fall through here and still think this is a ATA-(Slave)Drive 
+	;but there is no drive! So do the following:
+	;Sanity check: the model MUST only consist of ASCII-characters between $20 and $7E
+	;this check is done in the CopyString routine!
 
 	move.l   d4,a5
 	add.l    #54,a5  ;here is the model number
