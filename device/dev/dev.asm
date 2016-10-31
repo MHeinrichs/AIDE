@@ -40,6 +40,7 @@
 	XREF  WRITEOPE      ;the types of operation for IDERdWt
 	XREF  ATARdWt       ;Read/Write routine
 	XREF  ATARdWtLen
+	XREF  EndCodeInit
 	XREF  InitDrive     ;Drive initialisation routine
 	XREF  SCSIDirectCmd ;SCSI direct command routine
 	;XREF  blink         ;Routine that blinks the power LED
@@ -95,7 +96,7 @@ initDDescrip:
 	            ;STRUCTURE RT,0
 	  DC.W    RTC_MATCHWORD    ; UWORD RT_MATCHWORD
 	  DC.L    initDDescrip     ; APTR  RT_MATCHTAG
-	  DC.L    EndCodeDev       ; APTR  RT_ENDSKIP
+	  DC.L    EndCodeInit      ; APTR  RT_ENDSKIP
 	  DC.B    RTF_AUTOINIT     ; UBYTE RT_FLAGS
 	  DC.B    VERSION          ; UBYTE RT_VERSION
 	  DC.B    NT_DEVICE        ; UBYTE RT_TYPE
@@ -166,22 +167,22 @@ init1
 ;  cmp.l  #$A00000,a0
 ;  bgt.s  relocate_atardwt
 ;  bra.s  end_relocate ;already in the right piece of fastram!
-relocate_atardwt  
-	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1
-  CALLSYS AllocMem
-  tst.l  d0
-  beq.s  end_relocate
-  move.l d0,md_ATARdWt(a5)
-  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
-  lea    ATARdWt,a0
-	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-  move.l md_ATARdWt(a5),a1
-  CALLSYS CopyMem
-  cmpi.w #37,LIB_VERSION(a6)
-  blt.s end_relocate
-  CALLSYS CacheClearU
-end_relocate:
+;relocate_atardwt  
+;	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+;	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1
+;  CALLSYS AllocMem
+;  tst.l  d0
+;  beq.s  end_relocate
+;  move.l d0,md_ATARdWt(a5)
+;  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
+;  lea    ATARdWt,a0
+;	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+;  move.l md_ATARdWt(a5),a1
+;  CALLSYS CopyMem
+;  cmpi.w #37,LIB_VERSION(a6)
+;  blt.s end_relocate
+;  CALLSYS CacheClearU
+;end_relocate:
 
 	move.l   a5,d0
 	bra      init_end
@@ -591,6 +592,7 @@ BeginIO_NoCmd:
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 	move.l   a2,-(sp)
 	move.l   a1,a2
+	moveq    #0,d0                ;clear D0
 	clr.b    IO_ERROR(a2)         ;No error so far
 	move.w   IO_COMMAND(a2),d0
 	lsl      #2,d0                ;Multiply by 4 to get table offset

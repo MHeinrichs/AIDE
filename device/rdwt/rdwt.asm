@@ -443,5 +443,7 @@ pu1
 	move.l	(sp)+,d0
 	rts
 
+	Public EndCodeATARdWt
+EndCodeATARdWt
 	END
 

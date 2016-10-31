@@ -1,5 +1,5 @@
 MYPROCSTACKSIZE   EQU   $1000
-MYPROCPRI   EQU   10
+MYPROCPRI   EQU   5
 MYPRI   EQU   5
 
 
@@ -102,11 +102,11 @@ MYTASKNAME2   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.31 (17.05.2016)",13,10,0
+	   dc.b    "IDE.Device 2.32 (31.10.2016)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 31
+REVISION equ 32
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

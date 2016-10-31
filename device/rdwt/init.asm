@@ -397,6 +397,7 @@ sdr4
 CP3044txt   dc.b  'CP3044 ',0    ; 8 bytes = 2 longwords ->alligned!
 	cnop  0,4
 	
-
+	Public EndCodeInit
+EndCodeInit:
 	END
 
