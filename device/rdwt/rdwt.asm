@@ -21,7 +21,7 @@
 	include "exec/lists.i"
 	include "exec/libraries.i"
 	include "exec/devices.i"
-	
+	include "exec/ables.i"	
 	include "exec/memory.i"
 	include "exec/io.i"
 	include "exec/tasks.i"
@@ -79,6 +79,7 @@ transfer
 	move.l	a0,a5				 ;Start address
 	move.l	d1,d6				 ;Start block
 	move.l	d3,d7				 ;# blocks
+	move.l  ABSEXECBASE,A6 ;exec base into A6 for enable/disable
 	;register sum up:
 	;a0 = free (start address)
 	;a1 = free
@@ -86,7 +87,7 @@ transfer
 	;a3 = unit pointer
 	;a4 = free
 	;a5 = startaddress (buffer to write to)
-	;a6 = free
+	;a6 = EXEC_BASE
 	;d0 = free
 	;d1 = free
 	;d2 = free
@@ -103,10 +104,16 @@ domore
 
 between1andMax
 	move.l d5,d4					 ;d5 is number of sectors in this round
-	and.l	 #$FF,d4				  ; 256 sectors = 00
+	;PRINTF 1,<'transfering %lx Blocks at LBA %lx',13,10>,D4,D6
+	;and.l	 #$FF,d4				  ; 256 sectors = 00
 maskd4done	
 	WAITREADYFORNEWCOMMAND D0,D1
-	bsr    setupdrive ;this routine destroys d0-d3
+	bsr    setupdrive ;this routine destroys d0-D3
+	;PRINTF 1,<'Drive set up complete!',13,10>
+	;now we enter the time critical path. 
+	;No interrupt OR taskswitch should disturb us now!
+	;FORBID
+	;DISABLE
 	cmp.l	 #READOPE,a2
 	beq 	 wasread
 	;Format or Write
@@ -117,6 +124,7 @@ wasread
 
 do_command:  
 	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
+	;PRINTF 1,<'Command issued Status: %d',13,10>,D0
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
 	WAITDRQ	D2,D3
@@ -128,15 +136,24 @@ nextoneblock
 read_block:
 	RATADATAA5_512_BYTES	;destroys d0
 checkerrorforthisblock:
+	;DLY400NS
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
-	and.l   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
+	;PRINTF 1,<'Data transfered! Status: %d',13,10>,D0
+	AND.l   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
 	beq.s   looptonextblock
 	;check for not busy and then for errors
 	bsr     errorcheck
+	;PRINTF 1,<'Error check! Status: %d',13,10>,D0
 	bne  	  errcode
 looptonextblock	
 	dbne	  d4,nextoneblock
 sectoracok
+	;now we leave the time critical path. 
+	;enable interrupt AND taskswitch
+	;ENABLE
+	;PERMIT
+
+	;PRINTF 1,<'Next transfer. Remaining: %ld-%ld',13,10>,D7,D5
 	add.l	 d5,d6					 ;next block number
 	sub.l	 d5,d7
 	bne 	 domore
@@ -149,6 +166,7 @@ okcode
 	movem.l	(sp)+,d1-d7/a0-a6
 	rts								;EXIT RDWT.ASM
 errcode
+  PRINTF 1,<'error in R/W TF_STATUS D0:%x D2:%x D3: %x D4: %lx D5: %lx D6:%lx D7: %lx',13,10>,D0,D2,D3,D4,D5,D6,D7
 	;cmp.w	#ATAPI_DRV,mdu_drv_type(a3)
 	;beq.s	errcodeend
 	;cmp.w	#SATAPI_DRV,mdu_drv_type(a3)
@@ -157,7 +175,7 @@ errcode
 	;jsr	  ResetIDE
 errcodeend
 	move.l	#1,d0
-	bra.s	okcode
+	BRA.s	okcode
 
 ;this routine checks for errors and returns 0 in d0 if no error occured
 errorcheck

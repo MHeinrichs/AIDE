@@ -204,7 +204,7 @@ device_present:
 	move.l  md_ATARdWt(a1),ATARdWtRoutine(a5)
 	IFGE	DEBUG_DETAIL-1	
 	move.l  ATARdWtRoutine(a5),d0
-	PRINTF 1,<'ATARdWt routine located at %lx',13,10>,D0
+	PRINTF 1,<'ATARdWt routine located at %lx ',13,10>,D0
 	ENDC
 	; Open expansion.library
 	lea     expname,a1
@@ -238,7 +238,7 @@ device_present:
 check_unit:
 	 ;now open the device!
 	move.l  unitnum(a5),d0
-	 PRINTF 1,<'Opening unit %lx',13,10>,d0
+	 PRINTF 1,<'Opening unit %lx ',13,10>,d0
 	cmp.l #0,d0 ; is it unit 0?
 	beq find_the_drive
 	cmp.l #10,d0 ;is it unit 10?
@@ -261,12 +261,12 @@ search_rdb:
 	cmp.l  #MAX_BLOCK_SEARCH_RDB,d4
 	bge    next_unit  ;nothing found!
 	move.l rdbmem(a5),a0
-	PRINTF 1,<'Searching for rdb at block %ld, offset %lx',13,10>,d4,d0
+	PRINTF 1,<'Searching for rdb at block %ld, offset %lx ',13,10>,d4,d0
 	bsr    read_block
 	bne    next_unit ;on error go to next unit
 	;theoretically i have to checksum it...
 	move.l rdb_ID(a0),d5
-	PRINTF 1,<'block id: %lx, expected: %lx',13,10>,d5,d6
+	PRINTF 1,<'block id: %lx, expected: %lx ',13,10>,d5,d6
 	cmp.l  d5,d6
 	beq    rdb_found   
 	addi.l #512,d0  
@@ -274,7 +274,7 @@ search_rdb:
 	bra    search_rdb
 
 rdb_found:  
-	PRINTF 1,<'Found a rdb at block %ld',13,10>,d4
+	PRINTF 1,<'Found a rdb at block %ld ',13,10>,d4
 	move.l rdbmem(a5),a0 
 	move.l #IDNAME_PARTITION,d6
 	move.l rdb_PartitionList(a0),d0 ;there is our first partition
@@ -302,7 +302,7 @@ found_partition
 	;PRINTF 1,<'Found Dos name: %s, length %lx',13,10>,a1,d1
 	bsr    patch_dosname
 	bne    close_and_dealloc ; error in name patch
-	PRINTF 1,<'Found Dos name: %s, length %lx',13,10>,a1,d1
+	PRINTF 1,<'Found Dos name: %s, length %lx ',13,10>,a1,d1
 	move.l parametermem(a5),a3
 	move.l	a1,pp_dosName(a3)
 	lea		bootdevicename,a1
@@ -350,7 +350,7 @@ add_node:
 preparenextpartition:
 	move.l buffermem(a5),a0
 	move.l pb_Next(a0),d0
-	PRINTF 1,<'Next partition in block: %lx',13,10>,d0
+	PRINTF 1,<'Next partition in block: %lx ',13,10>,d0
 	cmp.l  #$FFFFFFFF,d0
 	bne    prepare_partition
 next_unit:   
@@ -414,7 +414,7 @@ dealloc_exit_final
 	CALLSYS FreeMem
 end_dealloc:       
 	move.l  d7,d0
-	PRINTF 1,<'End: returning %lx',13,10>,D0
+	PRINTF 1,<'End: returning %lx ',13,10>,D0
 	movem.l (SP)+,d1-d7/a0-a6
 	rts
 
@@ -478,11 +478,11 @@ unit_allready_there:
 	;bset.b   #SLAVE_BIT,d0
 	move.b   #$10,d0
 unit_default_init_0:
-  PRINTF 1,<'Set Unit Num %ld',13,10>,d0
+  PRINTF 1,<'Set Unit Num %ld ',13,10>,d0
 	move.b   d0,mdu_UnitNum(a3)
 	bsr      InitDrive 
 	move.w   mdu_drv_type(a3),d0
-	PRINTF 1,<'Unit is of type %d',13,10>,d0
+	PRINTF 1,<'Unit is of type %d ',13,10>,d0
 	cmp.w    #ATA_DRV,d0
 	beq      open_ok
 	cmp.w    #SATA_DRV,d0
@@ -621,47 +621,47 @@ print_param_packet:
 	movem.l d0/a0/a3,-(SP)
 	move.l parametermem(a5),a3
 	move.l	pp_execName(a3),a0
-	PRINTF 1,<'Device: %s',13,10>,a0
+	PRINTF 1,<'Device: %s ',13,10>,a0
 	move.l  pp_dosName(a3),a0
-	PRINTF 1,<'Dos Name: %s',13,10>,a0
+	PRINTF 1,<'Dos Name: %s ',13,10>,a0
 	move.l pp_unitNumber(a3),d0
 	PRINTF 1,<'Unit: %ld',13,10>,d0
 	move.l pp_flags(a3),d0
-	PRINTF 1,<'Flags: %ld',13,10>,d0
+	PRINTF 1,<'Flags: %ld ',13,10>,d0
 	move.l pp_paramSize(a3),d0
 	PRINTF 1,<'Environment size: %ld',13,10>,d0
 	move.l pp_blockSize(a3),d0
 	PRINTF 1,<'Block size: %ld',13,10>,d0
 	move.l	pp_sectorOrigin(a3),d0
-	PRINTF 1,<'Sector origin: %ld',13,10>,d0
+	PRINTF 1,<'Sector origin: %ld ',13,10>,d0
 	move.l	pp_surfaces(a3),d0
 	PRINTF 1,<'Surfaces: %ld',13,10>,d0
 	move.l	pp_sectorsPerBlock(a3),d0
-	PRINTF 1,<'Sectors per block: %ld',13,10>,d0
+	PRINTF 1,<'Sectors per block: %ld ',13,10>,d0
 	move.l	pp_blocksPerTrack(a3),d0
 	PRINTF 1,<'Blocks per track: %ld',13,10>,d0
 	move.l	pp_reservedBlocks(a3),d0
-	PRINTF 1,<'Reserved blocks: %ld',13,10>,d0
+	PRINTF 1,<'Reserved blocks: %ld ',13,10>,d0
 	move.l	pp_preface(a3),d0
-	PRINTF 1,<'Preface: %ld',13,10>,d0
+	PRINTF 1,<'Preface: %ld ',13,10>,d0
 	move.l	pp_interleave(a3),d0
 	PRINTF 1,<'Interleave: %ld',13,10>,d0
 	move.l	pp_lowCyl(a3),d0
 	PRINTF 1,<'Low cylinder: %ld',13,10>,d0
 	move.l	pp_highCyl(a3),d0
-	PRINTF 1,<'High cylinder: %ld',13,10>,d0
+	PRINTF 1,<'High cylinder: %ld ',13,10>,d0
 	move.l	pp_numBuffer(a3),d0
-	PRINTF 1,<'Num Buffers: %ld',13,10>,d0
+	PRINTF 1,<'Num Buffers: %ld ',13,10>,d0
 	move.l	pp_BufferMemType(a3),d0
-	PRINTF 1,<'Buffer type: %ld',13,10>,d0
+	PRINTF 1,<'Buffer type: %ld ',13,10>,d0
 	move.l	pp_maxTransfer(a3),d0
 	PRINTF 1,<'Max transfer: %lx',13,10>,d0
 	move.l	pp_mask(a3),d0
 	PRINTF 1,<'Mask: %lx',13,10>,d0
 	move.l	pp_bootPrio(a3),d0
-	PRINTF 1,<'Boot prio: %ld',13,10>,d0
+	PRINTF 1,<'Boot prio: %ld ',13,10>,d0
 	move.l	pp_dosType(a3),d0
-	PRINTF 1,<'Dostype: %lx',13,10>,d0
+	PRINTF 1,<'Dostype: %lx ',13,10>,d0
 	movem.l (SP)+,d0/a0/a3
 	rts
 	ENDC
@@ -744,7 +744,7 @@ check_status:
 	beq      bad_return_from_find
 	and.b    #BSY,d0
 	beq      test_registers              ;Not busy->test registers
-	PRINTF 1,<'Waiting to respond %ld sec',13,10>,d1
+	PRINTF 1,<'Waiting to respond %ld sec ',13,10>,d1
 	;bad busy wait
 	move.l   #500000,d0	    
 wait_loop:

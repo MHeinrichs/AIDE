@@ -29,7 +29,7 @@ TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
 
 
 LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   300000      ; timeout value for ATA - motor is on
+LOOP  equ   3000000      ; timeout value for ATA - motor is on
 LOOP2 equ   5120000     ; timeout value for ATA - motor is off
 LOOP3 equ   512000       ; timeout value for ATAPI
 TESTBYTE1 equ $B0
@@ -56,7 +56,7 @@ CHS_ACCESS equ 0
 LBA28_ACCESS equ 1
 LBA48_ACCESS equ 2
 
-MAX_TRANSFER equ 16 
+MAX_TRANSFER equ 256 
 
 	;------ state bit for unit stopped
 	BITDEF   MDU,STOPPED,2 

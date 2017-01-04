@@ -195,7 +195,7 @@ init_end:
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
 	movem.l  d2-d3/a2-a4,-(sp)
 	move.l   a1,a2                   ; save the iob
-	PRINTF 1,<'Opening device %ld',13,10>,d0
+	PRINTF 1,<' Opening device %ld',13,10>,d0
 	;------ see if the unit number is in range
 	moveq    #0,d3
 	cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
@@ -208,7 +208,7 @@ opn1
 	move.b   d0,d2                   ; save unit number
 	cmp.b    #MD_NUMUNITS,d0         ;Allow unit numbers 0 and 1.
 	bge      Open_Error              ;unit number is out of range
-  PRINTF 1,<'Opening unit: %lx offset %ld',13,10>,d0,d3
+  PRINTF 1,<' Opening unit: %lx offset %ld',13,10>,d0,d3
 	
 	;------ see if the unit is already initialized
 	lea.l    md_Units(a6,d3.l),a4
@@ -265,25 +265,25 @@ Open_Error:
 ; the segment list (as given to Init).  Otherwise close MUST return NULL.
 
 Close:      ;( device:a6, iob:a1 )
-	movem.l  d1/a2-a3,-(sp)
+	MOVEM.l  d1/a2-a3,-(sp)
 
-	move.l   a1,a2
-	move.l   IO_UNIT(a2),a3
+	MOVE.l   a1,a2
+	MOVE.l   IO_UNIT(a2),a3
 
 	;------ make sure the iob is not used again
-	moveq    #-1,d0
-	move.l   d0,IO_UNIT(a2)
-	move.l   d0,IO_DEVICE(a2)
+	MOVEQ    #-1,d0
+	MOVE.l   d0,IO_UNIT(a2)
+	MOVE.l   d0,IO_DEVICE(a2)
 
 	;------ see if the unit is still in use
-	subq.w   #1,UNIT_OPENCNT(a3)
+	SUBQ.w   #1,UNIT_OPENCNT(a3)
 
-  bne.s    Close_Device
-  bsr      ExpungeUnit
+  ;bne.s    Close_Device
+  ;bsr      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
-	moveq.l  #0,d0
+	MOVEQ.l  #0,d0
   subq.w   #1,LIB_OPENCNT(a6)
 	;------ see if there is anyone left with us open
   bne.s    Close_End
@@ -293,8 +293,8 @@ Close_Device:
 	;------ do the expunge
   bsr      Expunge
 Close_End:
-	movem.l  (sp)+,d1/a2-a3
-	rts
+	MOVEM.l  (sp)+,d1/a2-a3
+	RTS
 
 ;------- Expunge -----------------------------------------------------------
 ;
@@ -314,55 +314,55 @@ Close_End:
 ;
 
 Expunge:    ;( device: a6 )
-
-	movem.l  d1/d2/a5/a6,-(sp)
-
-	move.l   a6,a5
-
-	move.l   md_SysLib(a5),a6
-	;------ see if anyone has us open
-  tst.w    LIB_OPENCNT(a5)
-
-  beq      go_ahead_expunge
-	;------ it is still open.  set the delayed expunge flag
-  bset     #LIBB_DELEXP,md_Flags(a5)
-  CLEAR    d0
-  bra.s    Expunge_End
-go_ahead_expunge:
-	;------ go ahead and get rid of us.  Store our seglist in d2
-  move.l   md_SegList(a5),d2
-	;------ unlink from device list
-  move.l   a5,a1
-  CALLSYS  Remove
-  move.l   md_DosLib(a5),a1
-  CALLSYS  CloseLibrary
-
-
-	;device specific closings here...
-	move.l 	md_ATARdWt(a5),a1
-  move.l	(a1),d0
-  lea     ATARdWt,a1
-  cmp.l   a1,d0
-  beq.s   no_ata_rdwt_relocate
-
-  move.l	 d0,a1
-	move.l   #ATARdWtLen,d0
-	CALLSYS  FreeMem
-no_ata_rdwt_relocate:
-	;------ free our memory
-  CLEAR   d0
-  CLEAR   d1
-  move.l   a5,a1
-  move.w   LIB_NEGSIZE(a5),d1
-  sub.w    d1,a1
-  add.w    LIB_POSSIZE(a5),d0
-  add.l    d1,d0
-  CALLSYS  FreeMem
-	;------ set up our return value
-	move.l   d2,d0
-Expunge_End:
-  movem.l  (sp)+,d1/d2/a5/a6
-  rts
+;
+;	movem.l  d1/d2/a5/a6,-(sp)
+;
+;	move.l   a6,a5
+;
+;	move.l   md_SysLib(a5),a6
+;	;------ see if anyone has us open
+;  tst.w    LIB_OPENCNT(a5)
+;
+;  beq      go_ahead_expunge
+;	;------ it is still open.  set the delayed expunge flag
+;  bset     #LIBB_DELEXP,md_Flags(a5)
+;  CLEAR    d0
+;  bra.s    Expunge_End
+;go_ahead_expunge:
+;	;------ go ahead and get rid of us.  Store our seglist in d2
+;  move.l   md_SegList(a5),d2
+;	;------ unlink from device list
+;  move.l   a5,a1
+;  CALLSYS  Remove
+;  move.l   md_DosLib(a5),a1
+;  CALLSYS  CloseLibrary
+;
+;
+;	;device specific closings here...
+;	move.l 	md_ATARdWt(a5),a1
+;  move.l	(a1),d0
+;  lea     ATARdWt,a1
+;  cmp.l   a1,d0
+;  beq.s   no_ata_rdwt_relocate
+;
+;  move.l	 d0,a1
+;	move.l   #ATARdWtLen,d0
+;	CALLSYS  FreeMem
+;no_ata_rdwt_relocate:
+;	;------ free our memory
+;  CLEAR   d0
+;  CLEAR   d1
+;  move.l   a5,a1
+;  move.w   LIB_NEGSIZE(a5),d1
+;  sub.w    d1,a1
+;  add.w    LIB_POSSIZE(a5),d0
+;  add.l    d1,d0
+;  CALLSYS  FreeMem
+;	;------ set up our return value
+;	move.l   d2,d0
+;Expunge_End:
+;  movem.l  (sp)+,d1/d2/a5/a6
+;  rts
 
 Null:
 	moveq    #0,d0
@@ -384,7 +384,7 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	move.l   a3,a2                   ;InitStruct is initializing the UNIT
 	lea.l    mdu_Init(PC),A1
 	LINKSYS  InitStruct,md_SysLib(a6)
-	PRINTF 1,<'Init Struct passed',13,10>
+	PRINTF 1,<'Init Struct passed ',13,10>
 	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
 
 	moveq.l  #0,d0
@@ -680,6 +680,8 @@ MyError:
 ;perform packet command for ATAPI drive and emulate basic packets
 ;for ATA drives
 SCSIDirect     ;( iob:a1, unitptr:a3, devptr:a6 )
+  PRINTF 2,<'SCSI Direct',13,10>
+
 	cmp.w    #ATA_DRV,mdu_drv_type(a3)
 	beq      EmulateSCSI
 	cmp.w    #SATA_DRV,mdu_drv_type(a3)
@@ -769,7 +771,7 @@ escsi12
 	beq      page04
 	bra      escsi4
 page03
-  PRINTF 1,<'Emulate SCSI Mode Sense Page 3',13,10>
+  PRINTF 1,<'Emulate SCSI Mode Sense Page 3 ',13,10>
 	move.l   d1,scsi_Actual(a6)
 	subq.l   #1,d1
 	bmi      escsi4
@@ -777,7 +779,7 @@ page03
 	lea      mdu_EmulMSPage3(a3),a2
 	bra      escsi15
 page04
-  PRINTF 1,<'Emulate SCSI Mode Sense Page 4',13,10>
+  PRINTF 1,<'Emulate SCSI Mode Sense Page 4 ',13,10>
 	move.l   d1,scsi_Actual(a6)
 	subq.l   #1,d1
 	bmi      escsi4
@@ -835,7 +837,7 @@ escsi3
 	clr.b    scsi_Status(a6)
 	bra      escsi4
 escsi_ok
-  PRINTF 1,<'Emulate SCSI Test Unit Ready',13,10>
+  PRINTF 1,<'Emulate SCSI Test Unit Ready ',13,10>
 	clr.b    scsi_Status(a6)
 escsi4
 	IFGE	DEBUG_DETAIL-1	
@@ -884,9 +886,11 @@ GetDriveType:
 	rts
 
 td64_read64       ;a1 has the commandstructure
+  PRINTF 2,<'td64_read64',13,10>
 	move.l   #READOPE,a0
 	bra      td64j
 td64_write64
+  PRINTF 2,<'td64_write64 ',13,10>
 td64_format64
 	move.l   #WRITEOPE,a0
 td64j
@@ -894,10 +898,12 @@ IO_HIGHOFFSET EQU IO_ACTUAL      ;trackdisk64
 	move.l   IO_HIGHOFFSET(a1),d0 ; high offset
 	bra      drwf
 Read:
+  PRINTF 2,<'R  '>
 	move.l   #READOPE,a0
 	bra		jee32f
 Write:
 Format:
+  PRINTF 2,<'W  '>
 	move.l   #WRITEOPE,a0; write or format
 jee32f
 	move.l   #0,d0  ;high offset 0
@@ -909,9 +915,9 @@ drwf
 	clr.l    IO_ACTUAL(a1)        ; Initially, no data moved
 	move.l   IO_DATA(a1),a0
 	move.l   IO_LENGTH(a1),d0
-
+	PRINTF 2,<'length: %lx  '>,d0
 	;------ deal with zero length I/O
-	beq.s    RdWt_end
+	beq      RdWt_end
 
 	cmp.w    #ATAPI_DRV,mdu_drv_type(a3)
 	beq      Sec_Error            
@@ -920,6 +926,7 @@ drwf
 	               ;  and not for (S)ATAPI 
 	;------ check operation for legality
 	move.l   IO_OFFSET(a1),d1
+	PRINTF 2,<'offset: %lx',13,10>,d1
 	move.l   d1,d2
 	and.l    #$1ff,d2
 	bne      Sec_Error

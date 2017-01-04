@@ -1,4 +1,4 @@
-MYPROCSTACKSIZE   EQU   $1000
+MYPROCSTACKSIZE   EQU   $1800
 MYPROCPRI   EQU   5
 MYPRI   EQU   5
 
@@ -36,29 +36,20 @@ MYDEV_END   EQU 30
 MD_NUMUNITS EQU   $2
 
 	 STRUCTURE MyDev,LIB_SIZE
-	ULONG    md_SysLib
-	ULONG    md_DosLib
-	ULONG    md_SegList
-	ULONG    md_Base      ; Base address of this device's expansion board
-	ULONG    md_ATARdWt
-	STRUCT   md_Units,MD_NUMUNITS*4
 	UBYTE    md_Flags
-	UBYTE    md_pad,3
+	UBYTE    md_pad
+	APTR     md_SysLib
+	APTR     md_DosLib
+	APTR     md_SegList
+	APTR     md_Base      ; Base address of this device's expansion board
+	APTR     md_ATARdWt
+	STRUCT   md_Units,MD_NUMUNITS*4
 	LABEL    MyDev_Sizeof
 
 	 STRUCTURE MyDevUnit,UNIT_SIZE ;34 byte-> 2 byte missing for lon
 	UBYTE    mdu_SigBit           ;Signal bit allocated for interrupts
 	UBYTE    mdu_SectorBuffer	 ;max number of sectors per transfer block
 	;long alligned  
-	APTR     mdu_Device
-	ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
-	ULONG    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
-	ULONG    mdu_numlba48         ;only for drives with LBA48_ACCESS
-	ULONG    mdu_sectors_per_track   ;only for ATA
-	ULONG    mdu_heads            ;only for ATA
-	ULONG    mdu_cylinders        ;only for ATA
-	ULONG    mdu_numlba           ;only for ATA with LBA=LBA24_ACCESS OR LBA48_ACCESS
-	ULONG    mdu_act_Actual       ;SCSI-Packet-Stuff
 	STRUCT   mdu_EmulInquiry,9*4
 	STRUCT   mdu_EmulMSPage3,7*4
 	STRUCT   mdu_EmulMSPage4,7*4
@@ -68,6 +59,16 @@ MD_NUMUNITS EQU   $2
 	STRUCT   mdu_firm_rev,12      ;firware revision: 8 chars + 1 null byte +3pad
 	STRUCT   mdu_model_num,44     ;model number: 40 chars + 1 null byte +3 pad
 	STRUCT   mdu_act_cmd,16       ;actual SCSI-Command (8 words = 16 bytes)
+	APTR     mdu_Device
+	APTR     mdu_ATARdWt          ;Relocation of ATARdWt routine
+	ULONG    mdu_change_cnt       ;count of disk changes - only for ATAPI
+	ULONG    mdu_no_disk          ;isn't disk inserted? - only for ATAPI
+	ULONG    mdu_numlba48         ;only for drives with LBA48_ACCESS
+	ULONG    mdu_sectors_per_track   ;only for ATA
+	ULONG    mdu_heads            ;only for ATA
+	ULONG    mdu_cylinders        ;only for ATA
+	ULONG    mdu_numlba           ;only for ATA with LBA=LBA24_ACCESS OR LBA48_ACCESS
+	ULONG    mdu_act_Actual       ;SCSI-Packet-Stuff
 	UWORD    mdu_drv_type         ;see bellow for possible values
 	UWORD    mdu_lba              ;use LBA? For ATAPI always TRUE
 	UWORD    mdu_motor            ;motor status
@@ -80,7 +81,6 @@ MD_NUMUNITS EQU   $2
 	UBYTE    mdu_firstcall        ;was drive called yet?
 	UBYTE    mdu_auto             ;get drive parameters automatic? = TRUE
 	;Long align
-	ULONG    mdu_ATARdWt          ;Relocation of ATARdWt routine
 	STRUCT   mdu_stack,MYPROCSTACKSIZE
 	STRUCT   mdu_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
 	LABEL    MyDevUnit_Sizeof
@@ -93,20 +93,20 @@ MYDEVNAME   MACRO
 	   ENDM
 
 MYTASKNAME   MACRO
-	   DC.B   'ide0.device',0
+	   DC.B   'ide1.device',0
 	   ENDM
 
 MYTASKNAME2   MACRO
-	   DC.B   'ide1.device',0
+	   DC.B   'ide0.device',0
 	   ENDM
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.32 (31.10.2016)",13,10,0
+	   dc.b    "IDE.Device 2.33 (02.11.2016)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 32
+REVISION equ 33
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

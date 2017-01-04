@@ -101,7 +101,7 @@ wfc1a
 	ENDC
 wfc1b
 	IFGE	DEBUG_DETAIL-1	
-  PRINTF 1,<'ATA_IDENTIFY_DRIVE failed!',13,10>
+  PRINTF 1,<'ATA_IDENTIFY_DRIVE failed! ',13,10>
 	bra    wfc1
 	ENDC
 wfc1c
@@ -111,7 +111,7 @@ wfc1c
 	endC
 wfc1d
 	IFGE	DEBUG_DETAIL-1	
-	PRINTF 1,<'IDENTIFY_PACKET_DEVICE failed!',13,10>
+	PRINTF 1,<'IDENTIFY_PACKET_DEVICE failed! ',13,10>
 	bra    wfc1
 	ENDC
 wfc1e
@@ -330,7 +330,7 @@ kr2
 	LINKSYS FreeMem,a0
 	
 kr21:
-  PRINTF 1,<'Init drive routine ended',13,10>
+  PRINTF 1,<'Init drive routine ended ',13,10>
 
 	move.l   #0,d4
 	movem.l  (sp)+,d1/d2/d3/d4/a0/a1/a2/a5
