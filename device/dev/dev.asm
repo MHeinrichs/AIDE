@@ -84,7 +84,7 @@
 	XLIB  CopyMem
 	XLIB	CreateIORequest
 	XLIB	DeleteIORequest
-  XLIB  BeginIO
+  XREF  _BeginIO
 ;The _intena address is the register which can be used to disable or 
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
 _intena  equ   $dff09a ;;;ML
@@ -462,39 +462,39 @@ no_name_change:
 	LINKSYS AddTask,md_SysLib(a6)
 	move.l   (sp)+,a3      ; restore UNIT pointer
 	
-	;set up a message port
-	
-	;get memory for the intserver
-	moveq.l	 #IV_SIZE,d0		get interrupt server memory
-	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
-	LINKSYS  AllocMem,md_SysLib(a6)
-	tst.l    d0
-	bne.s    build_interrupt
-	bsr			 InitUnit_Cleanup
-	moveq.l  #-1,D0 ;error
-	bra			 InitUnit_End
-build_interrupt:
-	;store and setup
+;	;set up a message port
+;	
+;	;get memory for the intserver
+;	moveq.l	 #IS_SIZE,d0		get interrupt vector memory
+;	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+;	LINKSYS  AllocMem,md_SysLib(a6)
+;	tst.l    d0
+;	bne.s    build_interrupt
+;	bsr			 InitUnit_Cleanup
+;	moveq.l  #-1,D0 ;error
+;	bra			 InitUnit_End
+;build_interrupt:
+;	;store and setup
 ;	MOVE.l   d0,mdu_timeinterrupt(A3);store interrupt in unit structure (maybe for cleanup)
 ;	MOVE.l	 D0,A1 ; put the IV in a1
 ;	MOVE.b	 #NT_INTERRUPT,LN_TYPE(a1)
 ;	MOVE.b	 #MYTIMEOUTPRI,LN_PRI(a1) ; this is our priority
 ;	MOVE.l	 a3,IS_DATA(a1) ;server can see our unit structure
-;	LEA.l	   TimeoutServer(pc),A0 ;where the code is
+;	LEA  	   TimeoutServer(pc),A0 ;where the code is
 ;	MOVE.l	 a0,IS_CODE(a1)
-;	LEA.l	   myName(pc),a0
+;	LEA 	   myName(pc),a0
 ;	MOVE.l	 a0,LN_NAME(a1)
 ;
-	;get the memory for the port
-	moveq.l  #MP_SIZE,d0
-	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
-	LINKSYS  AllocMem,md_SysLib(a6)
-	tst.l    D0
-	bne.s    build_msgport
-	bsr			 InitUnit_Cleanup
-	moveq.l  #-1,D0 ;error
-	bra			 InitUnit_End
-build_msgport:
+;	;get the memory for the port
+;	moveq.l  #MP_SIZE,d0
+;	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+;	LINKSYS  AllocMem,md_SysLib(a6)
+;	tst.l    D0
+;	bne.s    build_msgport
+;	bsr			 InitUnit_Cleanup
+;	moveq.l  #-1,D0 ;error
+;	bra			 InitUnit_End
+;build_msgport:
 ;	;store and setup
 ;	move.l   d0,mdu_msgport(A3);store message port in unit structure
 ;	move.l	 D0,A1; put the port in a1
@@ -505,7 +505,7 @@ build_msgport:
 ;	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
 ;	;build timer request
 ;	move.l	 #IOTV_SIZE,D0
-;	CALLSYS	 CreateIORequest
+;	LINKSYS	 CreateIORequest,md_SysLib(a6)
 ;	tst.l    D0
 ;	bne.s    build_timerrequest
 ;	bsr			 InitUnit_Cleanup
@@ -514,18 +514,15 @@ build_msgport:
 ;build_timerrequest:
 ;	move.l   D0,mdu_timerequest(A3)
 ;	move.l   D0,A1
-;  MOVE.w	 TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
-;	MOVE.l	 #MICRODELAY,IOTV_TIME+TV_MICRO(A1) ;set up delay (10ms)
+;  MOVE.w	 #TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
+;	MOVE.l	 #MICRODELAY,IOTV_TIME+TV_MICRO(A1) ;set up delay 
 ;	;open timer device
 ;	lea			 timerName(pc),A0 ;timer.device
 ;	moveq.l	 #0,D0 ;unit 0
 ;	moveq.l	 #UNIT_MICROHZ,D1 ; CIA timer
 ;  ;the ioRequest is already in A1
-;	CALLSYS  OpenDevice ; we should close it somewhere...
-;	;now start the timer	
-;	;move.l   mdu_timerequest(Ax),A1
-;	;CALLSYS  BeginIO
-;	;------ mark us as ready to go
+;	LINKSYS  OpenDevice,md_SysLib(a6) ; we should close it somewhere...
+	;------ mark us as ready to go
 	moveq.l  #0,d0
 	btst     #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
 	beq.s    InitUnit_setUnitAdress
@@ -541,31 +538,31 @@ InitUnit_End:
 InitUnit_Cleanup: ;( a3:unitptr, a6:deviceptr )
   movem.l   A0-A1,-(sp)
   CMP.l 	  #0,a3
-	beq.s 		InitUnit_CleanupEnd
-	cmp.l 		#0,mdu_msgport(A3)
-	beq.s 		InitUnit_CleanupInterrupt
+	beq.s 		  InitUnit_CleanupEnd
+	cmp.l 		  #0,mdu_msgport(A3)
+	beq.s 		  InitUnit_CleanupInterrupt
 	moveq.l   #MP_SIZE,D0
-	move.l		mdu_msgport(A3),A1
+	move.l		  mdu_msgport(A3),A1
 	CALLSYS  	FreeMem
 InitUnit_CleanupInterrupt:
-  cmp.l 		#0,mdu_timeinterrupt(A3)
-  beq.s 		InitUnit_Cleanupiorequest
-	moveq.l 	#IV_SIZE,D0
-	move.l		mdu_timeinterrupt(A3),A1
+  cmp.l 		  #0,mdu_timeinterrupt(A3)
+  beq.s 		  InitUnit_Cleanupiorequest
+	moveq.l 	  #IV_SIZE,D0
+	move.l		  mdu_timeinterrupt(A3),A1
 	CALLSYS  	FreeMem
 InitUnit_Cleanupiorequest:
-	cmp.l 		#0,mdu_timerequest(A3)
-	BEQ.s			InitUnit_CleanupUnit
-	MOVE.l		mdu_timerequest(A3),A0
+	cmp.l 		  #0,mdu_timerequest(A3)
+	BEQ.s			 InitUnit_CleanupUnit
+	MOVE.l		  mdu_timerequest(A3),A0
 	CALLSYS  	DeleteIORequest
 InitUnit_CleanupUnit:
-	move.l  	#MyDevUnit_Sizeof,D0
-	move.l		A3,A1
+	move.l  	  #MyDevUnit_Sizeof,D0
+	move.l		  A3,A1
 	CALLSYS  	FreeMem
 InitUnit_CleanupEnd:
-	moveq.l 	#0,D0 
-  movem.l  (sp)+,A0-A1
-  RTS
+	moveq.l 	  #0,D0 
+ 	movem.l  (sp)+,A0-A1
+  RTS       
   
 FreeUnit:   ;( a3:unitptr, a6:deviceptr )
 
@@ -710,6 +707,13 @@ BeginIO_NoCmd:
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 	;move.l   a2,-(sp)
 	;move.l   a1,a2
+;	;now start the timer
+;	move.l   A1,-(sp)	
+;	MOVE.l	 #30000,mdu_timeout(A3) ; io must complete in 30 sec!
+;	MOVE.l   mdu_timerequest(A3),A1
+;	jsr  		 _BeginIO
+;	move.l   (sp)+,A1
+
 	moveq    #0,d0                ;clear D0
 	clr.b    IO_ERROR(A1)         ;No error so far
 	move.w   IO_COMMAND(A1),d0
@@ -718,6 +722,7 @@ PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 	move.l   0(a0,d0.w),a0
 	jsr      (a0) ; JSR TO THE ADDRESS WE READ FROM THE CMD TABLE
 	;move.l   (sp)+,a2
+;	MOVE.l	 #0,mdu_timeout(A3) ;disable the timeoutint
 	rts
 
 
@@ -1218,26 +1223,26 @@ Task_NextMessage:
 ;  Public TaskLen
 TaskLen = *-Task_Begin    
  
-  ;; unit pointer in a1
-TimeoutServer:
-	moveq.l		#0,d0	;set no error
-  CMP.l		  #0,mdu_timeout(A1)
-  BEQ.s			TimeOut_End
-  SUBQ.l		#1,mdu_timeout(A1)
-	MOVEM.l		A0-A2/A6,-(sp)
-	move.l		mdu_msgport(A1),A0
-  CALLSYS   GetMsg
-  tst.l     d0
-  beq       TimeOut_NoMessage ; no message?
-  MOVE.l	  d0,a1							; put the port to A1 for ioRequest
-  MOVE.w	  TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
-	MOVE.l	  #MICRODELAY,IOTV_TIME+TV_MICRO(a1) ;set up delay (10ms)
-	move.l  	mdu_Device(A1),A6  ; Point to device structure
-  ;CALLSYS   BeginIO  
-TimeOut_NoMessage:
-	MOVEM.l		(sp)+,A0-A2/A6
-TimeOut_End:
-	rts
+;  ;; unit pointer in a1
+;TimeoutServer:
+;	moveq.l		#0,d0	;set no error
+;  CMP.l		  #0,mdu_timeout(A1)
+;  BEQ.s			TimeOut_End
+;  SUBQ.l		#1,mdu_timeout(A1)
+;	MOVEM.l		A0-A2/A6,-(sp)
+;	move.l		mdu_msgport(A1),A0
+;  CALLSYS   GetMsg
+;  tst.l     d0
+;  beq       TimeOut_NoMessage ; no message?
+;  MOVE.l	  d0,a1							; put the port to A1 for ioRequest
+;  MOVE.w	  #TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
+;	MOVE.l	  #MICRODELAY,IOTV_TIME+TV_MICRO(a1) ;set up delay (10ms)
+;	move.l  	mdu_Device(A1),A6  ; Point to device structure
+;  jsr		    _BeginIO  
+;TimeOut_NoMessage:
+;	MOVEM.l		(sp)+,A0-A2/A6
+;TimeOut_End:
+;	rts
 	cnop  0,4    
 mdu_Init:
 	; ------ Initialize the unit
