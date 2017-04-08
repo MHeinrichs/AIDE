@@ -13,6 +13,7 @@
 	include "exec/ables.i"
 	include "exec/errors.i"
 	include "exec/tasks.i"
+	include "devices/timer.i"
 	include "devices/scsidisk.i"
 	include "libraries/expansion.i"
 	include "libraries/configvars.i"
@@ -81,7 +82,9 @@
 	XLIB  AddBootNode
 	XLIB  CacheClearU
 	XLIB  CopyMem
-
+	XLIB	CreateIORequest
+	XLIB	DeleteIORequest
+  XLIB  BeginIO
 ;The _intena address is the register which can be used to disable or 
 ;enable the interrupts in a way that they do not reach the 68000 CPU. 
 _intena  equ   $dff09a ;;;ML
@@ -108,6 +111,7 @@ initDDescrip:
 
 myName:     MYDEVNAME
 dosName:    DOSNAME
+timerName:	TIMERNAME
 idString: IDSTRINGMACRO ;This is from MYDEVI: include file
 myTaskName: MYTASKNAME
 	cnop 0,4
@@ -161,28 +165,48 @@ init1
   ;find the location of ATARdWt
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
-;  PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
+  PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
+  lea    Task_Begin,a0
+  move.l a0,md_task(a5)
+  PRINTF 1,<'Original Task    Position: %lx',13,10>,a0
 ;  cmp.l  #$600000,a0
 ;  blt.s  relocate_atardwt
 ;  cmp.l  #$A00000,a0
 ;  bgt.s  relocate_atardwt
-;  bra.s  end_relocate ;already in the right piece of fastram!
-;relocate_atardwt  
-;	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-;	move.l #MEMF_PUBLIC!MEMF_CLEAR,d1
-;  CALLSYS AllocMem
-;  tst.l  d0
-;  beq.s  end_relocate
-;  move.l d0,md_ATARdWt(a5)
-;  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
-;  lea    ATARdWt,a0
-;	move.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-;  move.l md_ATARdWt(a5),a1
-;  CALLSYS CopyMem
-;  cmpi.w #37,LIB_VERSION(a6)
-;  blt.s end_relocate
-;  CALLSYS CacheClearU
-;end_relocate:
+;  bra.s  end_relocate_atardwt ;already in the right piece of fastram!
+relocate_atardwt  
+	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
+  CALLSYS AllocMem
+  tst.l  d0
+  beq.s  end_relocate_atardwt
+  move.l d0,md_ATARdWt(a5)
+  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
+  lea    ATARdWt,a0
+	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+  move.l md_ATARdWt(a5),a1
+  CALLSYS CopyMem
+  cmpi.w #37,LIB_VERSION(a6)
+  blt.s end_relocate_atardwt
+  CALLSYS CacheClearU
+end_relocate_atardwt:
+relocate_task:
+	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
+	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
+  CALLSYS AllocMem
+  tst.l  d0
+  beq.s  end_relocate_task
+  move.l d0,md_task(a5)
+  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
+  lea    Task_Begin,a0
+	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
+  move.l md_task(a5),a1
+  CALLSYS CopyMem
+  cmpi.w #37,LIB_VERSION(a6)
+  blt.s end_relocate_task
+  CALLSYS CacheClearU
+end_relocate_task:
+
 
 	move.l   a5,d0
 	bra      init_end
@@ -370,9 +394,10 @@ Null:
 	
 InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 
-	movem.l  d2-d4/a1-a2,-(sp)
-
+	movem.l  D1-d4/A0-a2,-(sp)
+  
 	;------ allocate unit memory
+	move.l   #0,A3 ;clear a3!
 	move.l   #MyDevUnit_Sizeof,d0
 	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
 	LINKSYS  AllocMem,md_SysLib(a6)
@@ -426,8 +451,9 @@ no_name_change:
 									;can do this for you)
 
 ;   Startup the task
-	lea	    mdu_tcb(a3),a1
-	lea	    Task_Begin(PC),a2
+	lea	     mdu_tcb(a3),a1
+	move.l   md_task(A6),a2
+	;lea			 Task_Begin(pc),A2
 	move.l   a3,-(sp)      ; Preserve UNIT pointer
 	lea	    -1,a3	  ; generate address error
 		  						; if task ever "returns" (we RemTask() it
@@ -436,7 +462,70 @@ no_name_change:
 	LINKSYS AddTask,md_SysLib(a6)
 	move.l   (sp)+,a3      ; restore UNIT pointer
 	
-	;------ mark us as ready to go
+	;set up a message port
+	
+	;get memory for the intserver
+	moveq.l	 #IV_SIZE,d0		get interrupt server memory
+	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+	LINKSYS  AllocMem,md_SysLib(a6)
+	tst.l    d0
+	bne.s    build_interrupt
+	bsr			 InitUnit_Cleanup
+	moveq.l  #-1,D0 ;error
+	bra			 InitUnit_End
+build_interrupt:
+	;store and setup
+;	MOVE.l   d0,mdu_timeinterrupt(A3);store interrupt in unit structure (maybe for cleanup)
+;	MOVE.l	 D0,A1 ; put the IV in a1
+;	MOVE.b	 #NT_INTERRUPT,LN_TYPE(a1)
+;	MOVE.b	 #MYTIMEOUTPRI,LN_PRI(a1) ; this is our priority
+;	MOVE.l	 a3,IS_DATA(a1) ;server can see our unit structure
+;	LEA.l	   TimeoutServer(pc),A0 ;where the code is
+;	MOVE.l	 a0,IS_CODE(a1)
+;	LEA.l	   myName(pc),a0
+;	MOVE.l	 a0,LN_NAME(a1)
+;
+	;get the memory for the port
+	moveq.l  #MP_SIZE,d0
+	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
+	LINKSYS  AllocMem,md_SysLib(a6)
+	tst.l    D0
+	bne.s    build_msgport
+	bsr			 InitUnit_Cleanup
+	moveq.l  #-1,D0 ;error
+	bra			 InitUnit_End
+build_msgport:
+;	;store and setup
+;	move.l   d0,mdu_msgport(A3);store message port in unit structure
+;	move.l	 D0,A1; put the port in a1
+;	move.b	 #PA_SOFTINT,MP_FLAGS(A1)	;soft interrupt
+;	move.l	 mdu_timeinterrupt(A3),MP_SIGTASK(A1); pointer to interrupt vector
+;	move.b	 #NT_MSGPORT,LN_TYPE(a1)	;it's a simple message port
+;	lea	     MP_MSGLIST(A1),a0;init the list
+;	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
+;	;build timer request
+;	move.l	 #IOTV_SIZE,D0
+;	CALLSYS	 CreateIORequest
+;	tst.l    D0
+;	bne.s    build_timerrequest
+;	bsr			 InitUnit_Cleanup
+;	moveq.l  #-1,D0 ;error
+;	bra			 InitUnit_End
+;build_timerrequest:
+;	move.l   D0,mdu_timerequest(A3)
+;	move.l   D0,A1
+;  MOVE.w	 TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
+;	MOVE.l	 #MICRODELAY,IOTV_TIME+TV_MICRO(A1) ;set up delay (10ms)
+;	;open timer device
+;	lea			 timerName(pc),A0 ;timer.device
+;	moveq.l	 #0,D0 ;unit 0
+;	moveq.l	 #UNIT_MICROHZ,D1 ; CIA timer
+;  ;the ioRequest is already in A1
+;	CALLSYS  OpenDevice ; we should close it somewhere...
+;	;now start the timer	
+;	;move.l   mdu_timerequest(Ax),A1
+;	;CALLSYS  BeginIO
+;	;------ mark us as ready to go
 	moveq.l  #0,d0
 	btst     #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
 	beq.s    InitUnit_setUnitAdress
@@ -446,9 +535,38 @@ InitUnit_setUnitAdress:
 	move.l   a3,md_Units(a6,d0.l)    ;set unit table
  
 InitUnit_End:
-	movem.l  (sp)+,d2-d4/a1-a2
+	movem.l  (sp)+,d1-d4/a0-a2
 	rts
-
+	
+InitUnit_Cleanup: ;( a3:unitptr, a6:deviceptr )
+  movem.l   A0-A1,-(sp)
+  CMP.l 	  #0,a3
+	beq.s 		InitUnit_CleanupEnd
+	cmp.l 		#0,mdu_msgport(A3)
+	beq.s 		InitUnit_CleanupInterrupt
+	moveq.l   #MP_SIZE,D0
+	move.l		mdu_msgport(A3),A1
+	CALLSYS  	FreeMem
+InitUnit_CleanupInterrupt:
+  cmp.l 		#0,mdu_timeinterrupt(A3)
+  beq.s 		InitUnit_Cleanupiorequest
+	moveq.l 	#IV_SIZE,D0
+	move.l		mdu_timeinterrupt(A3),A1
+	CALLSYS  	FreeMem
+InitUnit_Cleanupiorequest:
+	cmp.l 		#0,mdu_timerequest(A3)
+	BEQ.s			InitUnit_CleanupUnit
+	MOVE.l		mdu_timerequest(A3),A0
+	CALLSYS  	DeleteIORequest
+InitUnit_CleanupUnit:
+	move.l  	#MyDevUnit_Sizeof,D0
+	move.l		A3,A1
+	CALLSYS  	FreeMem
+InitUnit_CleanupEnd:
+	moveq.l 	#0,D0 
+  movem.l  (sp)+,A0-A1
+  RTS
+  
 FreeUnit:   ;( a3:unitptr, a6:deviceptr )
 
 	tst.l    (a3)   ;valid pointer
@@ -590,16 +708,16 @@ BeginIO_NoCmd:
 ; a1 has the io request.  Bounds checking has already been done on
 ; the io request.
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
-	move.l   a2,-(sp)
-	move.l   a1,a2
+	;move.l   a2,-(sp)
+	;move.l   a1,a2
 	moveq    #0,d0                ;clear D0
-	clr.b    IO_ERROR(a2)         ;No error so far
-	move.w   IO_COMMAND(a2),d0
+	clr.b    IO_ERROR(A1)         ;No error so far
+	move.w   IO_COMMAND(A1),d0
 	lsl      #2,d0                ;Multiply by 4 to get table offset
 	lea      cmdtable(pc),a0
 	move.l   0(a0,d0.w),a0
 	jsr      (a0) ; JSR TO THE ADDRESS WE READ FROM THE CMD TABLE
-	move.l   (sp)+,a2
+	;move.l   (sp)+,a2
 	rts
 
 
@@ -624,7 +742,6 @@ TermIO_Immediate:
 	LINKSYS  ReplyMsg,md_SysLib(a6)
 TermIO_End:
 	rts
-
 
 ChangeNum:
 	cmp.w    #ATA_DRV,mdu_drv_type(a3)
@@ -1098,8 +1215,29 @@ Task_NextMessage:
     exg     a5,a6	; get syslib back in a6
 
     bra.s   Task_NextMessage
-    
-    
+;  Public TaskLen
+TaskLen = *-Task_Begin    
+ 
+  ;; unit pointer in a1
+TimeoutServer:
+	moveq.l		#0,d0	;set no error
+  CMP.l		  #0,mdu_timeout(A1)
+  BEQ.s			TimeOut_End
+  SUBQ.l		#1,mdu_timeout(A1)
+	MOVEM.l		A0-A2/A6,-(sp)
+	move.l		mdu_msgport(A1),A0
+  CALLSYS   GetMsg
+  tst.l     d0
+  beq       TimeOut_NoMessage ; no message?
+  MOVE.l	  d0,a1							; put the port to A1 for ioRequest
+  MOVE.w	  TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
+	MOVE.l	  #MICRODELAY,IOTV_TIME+TV_MICRO(a1) ;set up delay (10ms)
+	move.l  	mdu_Device(A1),A6  ; Point to device structure
+  ;CALLSYS   BeginIO  
+TimeOut_NoMessage:
+	MOVEM.l		(sp)+,A0-A2/A6
+TimeOut_End:
+	rts
 	cnop  0,4    
 mdu_Init:
 	; ------ Initialize the unit

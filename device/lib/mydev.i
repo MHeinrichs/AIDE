@@ -1,7 +1,8 @@
 MYPROCSTACKSIZE   EQU   $1800
 MYPROCPRI   EQU   5
 MYPRI   EQU   5
-
+MYTIMEOUTPRI   EQU   0
+MICRODELAY EQU 10
 
 	include "debug/debug-wrapper.i"
 		IFND	DEBUG_DETAIL
@@ -37,12 +38,13 @@ MD_NUMUNITS EQU   $2
 
 	 STRUCTURE MyDev,LIB_SIZE
 	UBYTE    md_Flags
-	UBYTE    md_pad
+	UBYTE    pad
 	APTR     md_SysLib
 	APTR     md_DosLib
 	APTR     md_SegList
 	APTR     md_Base      ; Base address of this device's expansion board
 	APTR     md_ATARdWt
+	APTR		 md_task
 	STRUCT   md_Units,MD_NUMUNITS*4
 	LABEL    MyDev_Sizeof
 
@@ -81,6 +83,10 @@ MD_NUMUNITS EQU   $2
 	UBYTE    mdu_firstcall        ;was drive called yet?
 	UBYTE    mdu_auto             ;get drive parameters automatic? = TRUE
 	;Long align
+	ULONG    mdu_timeout
+	APTR     mdu_msgport
+	APTR     mdu_timeinterrupt
+	APTR     mdu_timerequest
 	STRUCT   mdu_stack,MYPROCSTACKSIZE
 	STRUCT   mdu_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
 	LABEL    MyDevUnit_Sizeof
@@ -102,11 +108,11 @@ MYTASKNAME2   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.33 (02.11.2016)",13,10,0
+	   dc.b    "IDE.Device 2.34 (06.04.2017)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 33
+REVISION equ 34
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0
