@@ -50,8 +50,8 @@
 	XLIB	FindName
 	XLIB FindResident
 	XLIB InitResident
-	XLIB Allocbd_configdev
-	XLIB Addbd_configdev
+	XLIB AllocConfigDev
+	XLIB AddConfigDev
 	XREF InitDrive
 	XREF ResetIDE
 		
@@ -77,7 +77,7 @@ romtag:
 
 
 
-	; Fake bd_configdev and Diagnostic ROM structure.
+	; Fake ConfigDev and Diagnostic ROM structure.
 fakebootrom:
 	dc.b    DAC_WORDWIDE+DAC_CONFIGTIME
 	dc.b    0
@@ -230,11 +230,11 @@ device_present:
 	move.l  d0,a6
 
 	;now build a fake config dev!
-	CALLSYS Allocbd_configdev
+	CALLSYS AllocConfigDev
 	;PRINTF 1,<'Created Config dev: %lx',13,10>,D0
 	move.l  d0,bd_configdev(a5)
 	beq     close_and_dealloc
-	;init the bd_configdev
+	;init the ConfigDev
 	move.l  d0,a0
 	lea.l   fakebootrom,a1
 	move.l  a1,cd_Rom+er_Reserved0c(a0) ;save the diag entry
@@ -243,7 +243,7 @@ device_present:
 	move.b  #ERTF_DIAGVALID+ERT_ZORROII,cd_Rom+er_Type(a0) ; this makes the thing autoboot
 	move.w  #2588,cd_Rom+er_Manufacturer(a0) ;a1k org :D
 	move.b  #123,cd_Rom+er_Product(a0)
-	CALLSYS Addbd_configdev ;add it to the system
+	CALLSYS AddConfigDev ;add it to the system
 
 	move.l  #0,bd_unitnum(a5)
 check_unit:
@@ -319,7 +319,7 @@ found_partition
 	lea		bootdevicename,a1
 	move.l	a1,pp_execName(a3)
 	move.l bd_unitnum(a5),d1
-	move.l	d1,pp_bd_unitnumber(a3)
+	move.l	d1,pp_unitnumber(a3)
 	move.l	pb_Flags(a0),pp_flags(a3)
 	lea.l	pb_Environment(a0),a0    ; start of origin
 	lea.l  pp_paramSize(a3),a3      ; start of destination (first word after flag)
@@ -330,7 +330,7 @@ copy_param_packet:
 	;restore buffers
 	move.l bd_buffermem(a5),a0 
 	move.l bd_parametermem(a5),a3
-	move.l #MEMF_PUBLIC,pp_bd_buffermemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
+	move.l #MEMF_PUBLIC,pp_buffermemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
 	IFGE	DEBUG_DETAIL-2
 	bsr print_param_packet  
 	ENDC
@@ -353,7 +353,7 @@ copy_param_packet:
 	move.l   #0,a1
 	btst     #PBFB_BOOTABLE,pp_flags+3(a3)
 	beq      add_node   ; no boot flag
-	;load the bd_configdev in a1
+	;load the ConfigDev in a1
 	move.l  bd_configdev(a5),a1
 add_node:
 	CALLSYS  AddBootNode	
@@ -490,7 +490,7 @@ unit_allready_there:
 	move.b   #$10,d0
 unit_default_init_0:
   PRINTF 1,<'Set Unit Num %ld ',13,10>,d0
-	move.b   d0,mdu_bd_unitnum(a3)
+	move.b   d0,mdu_UnitNum(a3)
 	bsr      InitDrive 
 	move.w   mdu_drv_type(a3),d0
 	PRINTF 1,<'Unit is of type %d ',13,10>,d0
@@ -600,7 +600,7 @@ next_dos_node:
 	;bne.s  next_dos_node
 	 ;PRINTF  1,<'It is a Boot Node',13,10>
 	;check the name
-	move.l bn_bd_devicenode(a0),a2 ;get the device node
+	move.l bn_DeviceNode(a0),a2 ;get the device node
 	move.l	dn_Name(a2),d0		; get the name (BPTR!)
 	beq    next_dos_node
 	lsl.l	#2,d0			; BPTR address divided by 4! mult*4 gets the address of the BSTR 
@@ -635,7 +635,7 @@ print_param_packet:
 	PRINTF 1,<'Device: %s ',13,10>,a0
 	move.l  pp_dosName(a3),a0
 	PRINTF 1,<'Dos Name: %s ',13,10>,a0
-	move.l pp_bd_unitnumber(a3),d0
+	move.l pp_unitnumber(a3),d0
 	PRINTF 1,<'Unit: %ld',13,10>,d0
 	move.l pp_flags(a3),d0
 	PRINTF 1,<'Flags: %ld ',13,10>,d0
@@ -663,7 +663,7 @@ print_param_packet:
 	PRINTF 1,<'High cylinder: %ld ',13,10>,d0
 	move.l	pp_numBuffer(a3),d0
 	PRINTF 1,<'Num Buffers: %ld ',13,10>,d0
-	move.l	pp_bd_buffermemType(a3),d0
+	move.l	pp_buffermemType(a3),d0
 	PRINTF 1,<'Buffer type: %ld ',13,10>,d0
 	move.l	pp_maxTransfer(a3),d0
 	PRINTF 1,<'Max transfer: %lx',13,10>,d0
@@ -704,7 +704,7 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
 	;d2 unit number 
 	move.l bd_unitptr(a5),a3
 	moveq  #0,d2
-	move.b mdu_bd_unitnum(a3),d2
+	move.b mdu_UnitNum(a3),d2
 	PRINTF 1,<'Reading block %lx on unit %lx',13,10>,d0,d2
 	move.l #READOPE,a2
 	move.l #0,d5

@@ -14,7 +14,7 @@ BD_REVISION equ 0
     STRUCTURE MyParmPkt,0
    APTR     pp_dosName
    APTR     pp_execName
-   ULONG    pp_bd_unitnumber
+   ULONG    pp_unitnumber
    ULONG    pp_flags
    ULONG    pp_paramSize
    ULONG    pp_blockSize
@@ -28,7 +28,7 @@ BD_REVISION equ 0
    ULONG    pp_lowCyl
    ULONG    pp_highCyl
    ULONG    pp_numBuffer
-   ULONG    pp_bd_buffermemType
+   ULONG    pp_buffermemType
    ULONG    pp_maxTransfer
    ULONG    pp_mask
    LONG     pp_bootPrio
