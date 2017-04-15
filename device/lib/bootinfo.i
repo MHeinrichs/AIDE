@@ -14,7 +14,7 @@ BD_REVISION equ 0
     STRUCTURE MyParmPkt,0
    APTR     pp_dosName
    APTR     pp_execName
-   ULONG    pp_unitNumber
+   ULONG    pp_bd_unitnumber
    ULONG    pp_flags
    ULONG    pp_paramSize
    ULONG    pp_blockSize
@@ -28,25 +28,26 @@ BD_REVISION equ 0
    ULONG    pp_lowCyl
    ULONG    pp_highCyl
    ULONG    pp_numBuffer
-   ULONG    pp_BufferMemType
+   ULONG    pp_bd_buffermemType
    ULONG    pp_maxTransfer
    ULONG    pp_mask
    LONG     pp_bootPrio
    ULONG    pp_dosType
    LABEL    MyParmPkt_Sizeof
 
-    STRUCTURE MyMemPkt,0
-   ULONG    residentstructure
-   ULONG    buffermem
-   ULONG    rdbmem
-   ULONG    parametermem
-   ULONG    configdev
-   ULONG    expansionlib
-   ULONG    devicenode
-   ULONG    iohandler
-   ULONG    unitptr
-   ULONG    unitnum
-   ULONG    ATARdWtRoutine
-   LABEL    MyMemPkt_Sizeof
+    STRUCTURE BootDevice,0
+   ULONG    bd_residentstructure
+   ULONG    bd_buffermem
+   ULONG    bd_rdbmem
+   ULONG    bd_parametermem
+   ULONG    bd_configdev
+   ULONG    bd_expansionlib
+   ULONG    bd_devicenode
+   ULONG    bd_iohandler
+   ULONG    bd_unitptr
+   ULONG    bd_unitnum
+   ULONG    bd_ATARdWtRoutine
+   ULONG    bd_ioRequest
+   LABEL    BootDevice_Sizeof
 
 

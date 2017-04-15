@@ -83,34 +83,46 @@ WATAWORD macro
 
 WAITNOTDRQ macro
    move.l   #LOOP,\2
+   bra.s    wqdstart\@
 wqd\@ 
-   RATABYTE TF_ALTERNATE_STATUS,\1
-   and.l    #DRQ,\1
+   DLY3US
+   subq.l   #1,\2
    beq.s    wqd1\@
-   dbra			\2,wqd\@   
+wqdstart\@ 
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #DRQ,\1
+   bne.s    wqd\@
 wqd1\@
    tst.l    \2
  endm
 
 WAITNOTBSY macro
    move.l   #LOOP,\2
+   bra.s    wnstart\@
 wn\@ 
-   RATABYTE TF_ALTERNATE_STATUS,\1
-   and.l    #BSY,\1
+   DLY3US
+   subq.l   #1,\2
    beq.s    wn1\@
-   dbra     \2,wn\@
+wnstart\@ 
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #BSY,\1
+   bne.s    wn\@
 wn1\@
    tst.l    \2
  endm
 
 WAITDRQ macro
    move.l   #LOOP,\2
+   bra.s    wdstart\@
 wd\@ 
-   RATABYTE TF_ALTERNATE_STATUS,\1
-   and.l    #BSY+DRQ,\1
-   cmp.l    #DRQ,\1
+   DLY3US
+   subq.l   #1,\2
    beq.s    wd1\@
-   dbra     \2,wd\@
+wdstart\@ 
+   RATABYTE TF_ALTERNATE_STATUS,\1
+   and.b    #BSY+DRQ,\1
+   cmp.b    #DRQ,\1
+   bne.s    wd\@
 wd1\@
    tst.l    \2
  endm
@@ -119,9 +131,10 @@ WAITREADYFORNEWCOMMAND macro
 	move.l	#2*LOOP,\2               ;double time because we wait for bsy to go low and DRDY to go up
 wrfc\@
   RATABYTE TF_ALTERNATE_STATUS,\1
-	and.l	 #BSY+DRDY+DWF+ERR,\1
-	cmp.l	 #DRDY,\1
+	and.b	 #BSY+DRDY+DWF+ERR,\1
+	cmp.b	 #DRDY,\1
 	beq.s	 wrfc1\@
+  DLY3US   ; make a processor speed independent minimum delay
   dbra     \2,wrfc\@
 wrfc1\@
   tst.l    \2

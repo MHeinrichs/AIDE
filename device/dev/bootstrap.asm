@@ -50,8 +50,8 @@
 	XLIB	FindName
 	XLIB FindResident
 	XLIB InitResident
-	XLIB AllocConfigDev
-	XLIB AddConfigDev
+	XLIB Allocbd_configdev
+	XLIB Addbd_configdev
 	XREF InitDrive
 	XREF ResetIDE
 		
@@ -77,7 +77,7 @@ romtag:
 
 
 
-	; Fake ConfigDev and Diagnostic ROM structure.
+	; Fake bd_configdev and Diagnostic ROM structure.
 fakebootrom:
 	dc.b    DAC_WORDWIDE+DAC_CONFIGTIME
 	dc.b    0
@@ -130,7 +130,7 @@ initRoutine:
 	move.l  ABSEXECBASE,a6
 	;bsr ResetIDE
 	;get structure for a mem-pointer-package
-	move.l  #MyMemPkt_Sizeof,d0
+	move.l  #BootDevice_Sizeof,d0
 	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
 	CALLSYS AllocMem
 	tst.l   d0
@@ -145,7 +145,7 @@ initRoutine:
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
-	move.l  d0,buffermem(a5)  
+	move.l  d0,bd_buffermem(a5)  
 
 	; Get 512 bytes of memory for rdb buffer
 	move.l  #BLOCKSIZE,d0
@@ -153,7 +153,7 @@ initRoutine:
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
-	move.l  d0,rdbmem(a5)
+	move.l  d0,bd_rdbmem(a5)
 
 	; get mem for parameter packet
 	move.l  #MyParmPkt_Sizeof,d0
@@ -161,16 +161,27 @@ initRoutine:
 	CALLSYS AllocMem
 	tst.l   d0
 	beq     close_and_dealloc
-	move.l  d0,parametermem(a5)
+	move.l  d0,bd_parametermem(a5)
 	;PRINTF 1,<'alloc %ld bytes for parameter packet at %lx',13,10>,#MyParmPkt_Sizeof,D0
 	   
 	; get mem for io handler
-	move.l  #IOSTD_SIZE,d0
-	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
-	CALLSYS AllocMem
-	tst.l   d0
-	beq     close_and_dealloc
-	move.l  d0,iohandler(a5)
+	
+;	move.l  #MP_SIZE,d0
+;	move.l  #MEMF_PUBLIC+MEMF_CLEAR,d1
+;	CALLSYS AllocMem
+;	tst.l   d0
+;	beq     close_and_dealloc
+;	move.l  d0,bd_iohandler(a5)
+;	move.l  d0,a1
+;	move.b	 #PA_SOFTINT,MP_FLAGS(A1)	;soft interrupt
+;	move.l	 mdu_timeinterrupt(A3),MP_SIGTASK(A1); pointer to interrupt vector
+;	move.b	 #NT_MSGPORT,LN_TYPE(a1)	;it's a simple message port
+	
+	lea	    MP_MSGLIST(a1),a0
+	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
+									;work magic on them before use.  (AddPort()
+									;can do this for you)
+
 	;PRINTF 1,<'alloc %ld bytes for parameter packet at %lx',13,10>,#IOSTD_SIZE,D0
 
 
@@ -199,11 +210,11 @@ initRoutine:
 	 beq     close_and_dealloc
 	
 device_present:
-	move.l  d0,residentstructure(a5)
-	move.l  residentstructure(a5),a1	
-	move.l  md_ATARdWt(a1),ATARdWtRoutine(a5)
+	move.l  d0,bd_residentstructure(a5)
+	move.l  bd_residentstructure(a5),a1	
+	move.l  md_ATARdWt(a1),bd_ATARdWtRoutine(a5)
 	IFGE	DEBUG_DETAIL-1	
-	move.l  ATARdWtRoutine(a5),d0
+	move.l  bd_ATARdWtRoutine(a5),d0
 	PRINTF 1,<'ATARdWt routine located at %lx ',13,10>,D0
 	ENDC
 	; Open expansion.library
@@ -213,17 +224,17 @@ device_present:
 	CALLSYS  OpenLibrary
 	tst.l   d0
 	beq     close_and_dealloc
-	 move.l  d0,expansionlib(a5)
+	 move.l  d0,bd_expansionlib(a5)
 	
 	;PRINTF 1,<'Opened expansion lib: %lx',13,10>,D0
 	move.l  d0,a6
 
 	;now build a fake config dev!
-	CALLSYS AllocConfigDev
+	CALLSYS Allocbd_configdev
 	;PRINTF 1,<'Created Config dev: %lx',13,10>,D0
-	move.l  d0,configdev(a5)
+	move.l  d0,bd_configdev(a5)
 	beq     close_and_dealloc
-	;init the ConfigDev
+	;init the bd_configdev
 	move.l  d0,a0
 	lea.l   fakebootrom,a1
 	move.l  a1,cd_Rom+er_Reserved0c(a0) ;save the diag entry
@@ -232,12 +243,12 @@ device_present:
 	move.b  #ERTF_DIAGVALID+ERT_ZORROII,cd_Rom+er_Type(a0) ; this makes the thing autoboot
 	move.w  #2588,cd_Rom+er_Manufacturer(a0) ;a1k org :D
 	move.b  #123,cd_Rom+er_Product(a0)
-	CALLSYS AddConfigDev ;add it to the system
+	CALLSYS Addbd_configdev ;add it to the system
 
-	move.l  #0,unitnum(a5)
+	move.l  #0,bd_unitnum(a5)
 check_unit:
 	 ;now open the device!
-	move.l  unitnum(a5),d0
+	move.l  bd_unitnum(a5),d0
 	 PRINTF 1,<'Opening unit %lx ',13,10>,d0
 	cmp.l #0,d0 ; is it unit 0?
 	beq find_the_drive
@@ -260,7 +271,7 @@ find_the_drive:
 search_rdb:
 	cmp.l  #MAX_BLOCK_SEARCH_RDB,d4
 	bge    next_unit  ;nothing found!
-	move.l rdbmem(a5),a0
+	move.l bd_rdbmem(a5),a0
 	PRINTF 1,<'Searching for rdb at block %ld, offset %lx ',13,10>,d4,d0
 	bsr    read_block
 	bne    next_unit ;on error go to next unit
@@ -275,10 +286,10 @@ search_rdb:
 
 rdb_found:  
 	PRINTF 1,<'Found a rdb at block %ld ',13,10>,d4
-	move.l rdbmem(a5),a0 
+	move.l bd_rdbmem(a5),a0 
 	move.l #IDNAME_PARTITION,d6
 	move.l rdb_PartitionList(a0),d0 ;there is our first partition
-	move.l buffermem(a5),a0 ;work on buffermem now!
+	move.l bd_buffermem(a5),a0 ;work on bd_buffermem now!
 	
 prepare_partition:
 	PRINTF 1,<'Loading partition in block: %lx',13,10>,d0
@@ -303,12 +314,12 @@ found_partition
 	bsr    patch_dosname
 	bne    close_and_dealloc ; error in name patch
 	PRINTF 1,<'Found Dos name: %s, length %lx ',13,10>,a1,d1
-	move.l parametermem(a5),a3
+	move.l bd_parametermem(a5),a3
 	move.l	a1,pp_dosName(a3)
 	lea		bootdevicename,a1
 	move.l	a1,pp_execName(a3)
-	move.l unitnum(a5),d1
-	move.l	d1,pp_unitNumber(a3)
+	move.l bd_unitnum(a5),d1
+	move.l	d1,pp_bd_unitnumber(a3)
 	move.l	pb_Flags(a0),pp_flags(a3)
 	lea.l	pb_Environment(a0),a0    ; start of origin
 	lea.l  pp_paramSize(a3),a3      ; start of destination (first word after flag)
@@ -317,9 +328,9 @@ copy_param_packet:
 	move.l (a0)+,(a3)+
 	dbra   d0,copy_param_packet     
 	;restore buffers
-	move.l buffermem(a5),a0 
-	move.l parametermem(a5),a3
-	move.l #MEMF_PUBLIC,pp_BufferMemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
+	move.l bd_buffermem(a5),a0 
+	move.l bd_parametermem(a5),a3
+	move.l #MEMF_PUBLIC,pp_bd_buffermemType(a3) ;fix buffer type we can operate from any memory, which should be fast-mem!
 	IFGE	DEBUG_DETAIL-2
 	bsr print_param_packet  
 	ENDC
@@ -332,85 +343,85 @@ copy_param_packet:
 	tst.l   d0
 	beq     close_and_dealloc
 	PRINTF 1,<'Made DosNode: %lx',13,10>,D0
-	move.l  d0,devicenode(a5) ; move the device node to mem
-	move.l parametermem(a5),a3 ;first move parampacket to a3 (again?!?)
+	move.l  d0,bd_devicenode(a5) ; move the device node to mem
+	move.l bd_parametermem(a5),a3 ;first move parampacket to a3 (again?!?)
 	;set d0/d1: priority and startproc
 	move.l   pp_bootPrio(a3),d0			this priority
 	moveq.l	#ADNF_STARTPROC,d1	StartProc = true
-	;put the DeviceNode from mem in A0
-	move.l   devicenode(a5),a0 
+	;put the bd_devicenode from mem in A0
+	move.l   bd_devicenode(a5),a0 
 	move.l   #0,a1
 	btst     #PBFB_BOOTABLE,pp_flags+3(a3)
 	beq      add_node   ; no boot flag
-	;load the ConfigDev in a1
-	move.l  configdev(a5),a1
+	;load the bd_configdev in a1
+	move.l  bd_configdev(a5),a1
 add_node:
 	CALLSYS  AddBootNode	
 	 PRINTF 1,<'AddBootNodeResult %lx',13,10>,d0
 preparenextpartition:
-	move.l buffermem(a5),a0
+	move.l bd_buffermem(a5),a0
 	move.l pb_Next(a0),d0
 	PRINTF 1,<'Next partition in block: %lx ',13,10>,d0
 	cmp.l  #$FFFFFFFF,d0
 	bne    prepare_partition
 next_unit:   
 	bsr    close_device
-	cmp.l  #10,unitnum(a5)
+	cmp.l  #10,bd_unitnum(a5)
 	beq    close_and_dealloc
-	move.l #10,unitnum(a5)
+	move.l #10,bd_unitnum(a5)
 	bra    check_unit
 
 close_and_dealloc:
 	move.l  ABSEXECBASE,a6
-	 tst.l	 expansionlib(a5)
+	 tst.l	 bd_expansionlib(a5)
 	 beq     dealloc_exit1
-	move.l  expansionlib(a5),a1
+	move.l  bd_expansionlib(a5),a1
 	CALLSYS CloseLibrary
 	;PRINTF 1,<'Closed expansion lib at %lx',13,10>,a1
-	move.l  #0,expansionlib(a5)
+	move.l  #0,bd_expansionlib(a5)
 dealloc_exit1:
-	tst.l   buffermem(a5) ;mem allocated?
+	tst.l   bd_buffermem(a5) ;mem allocated?
 	beq     dealloc_exit2
-	move.l  buffermem(a5),a1
+	move.l  bd_buffermem(a5),a1
 	move.l  #BLOCKSIZE,d0
 	;PRINTF 1,<'Free %ld byte buffer mem at %lx',13,10>,d0,a1
 	CALLSYS FreeMem
-	move.l #0,buffermem(a5)
+	move.l #0,bd_buffermem(a5)
 dealloc_exit2:
-	tst.l   parametermem(a5) ;mem allocated?
+	tst.l   bd_parametermem(a5) ;mem allocated?
 	beq     dealloc_exit3
-	move.l  parametermem(a5),a1
+	move.l  bd_parametermem(a5),a1
 	move.l  #MyParmPkt_Sizeof,d0
 	;PRINTF 1,<'Free %ld byte param mem at %lx',13,10>,d0,a1
 	CALLSYS FreeMem
-	move.l #0,parametermem(a5)
+	move.l #0,bd_parametermem(a5)
 dealloc_exit3:
 dealloc_exit4:
-	tst.l   iohandler(a5) ;mem allocated?
+	tst.l   bd_iohandler(a5) ;mem allocated?
 	beq     dealloc_exit5
-	move.l  iohandler(a5),a1
-	move.l  #IOSTD_SIZE,d0
-	;PRINTF 1,<'Free %ld byte iohandler mem at %lx',13,10>,d0,a1
+	move.l  bd_iohandler(a5),a1
+	move.l  #MP_SIZE,d0
+	;PRINTF 1,<'Free %ld byte bd_iohandler mem at %lx',13,10>,d0,a1
 	CALLSYS FreeMem
-	move.l #0,iohandler(a5)   
+	move.l #0,bd_iohandler(a5)   
 dealloc_exit5:
-	tst.l   rdbmem(a5) ;mem allocated?
+	tst.l   bd_rdbmem(a5) ;mem allocated?
 	beq     dealloc_exit6
-	move.l  rdbmem(a5),a1
+	move.l  bd_rdbmem(a5),a1
 	move.l  #BLOCKSIZE,d0
 	;PRINTF 1,<'Free %ld byte buffer mem at %lx',13,10>,d0,a1
 	CALLSYS FreeMem
-	move.l #0,rdbmem(a5)
+	move.l #0,bd_rdbmem(a5)
 dealloc_exit6:
-	tst.l   unitptr(a5)
+	tst.l   bd_unitptr(a5)
 	beq     dealloc_exit_final
-	move.l  unitptr(a5),a1
+	move.l  bd_unitptr(a5),a1
 	move.l  #MyDevUnit_Sizeof,d0
 	CALLSYS FreeMem
-	move.l  #0,unitptr(a5)
+	move.l  #0,bd_unitptr(a5)
 dealloc_exit_final
 	move.l  a5,a1
-	move.l  #MyMemPkt_Sizeof,d0
+	move.l  #BootDevice_Sizeof,d0
 	CALLSYS FreeMem
 end_dealloc:       
 	move.l  d7,d0
@@ -420,31 +431,31 @@ end_dealloc:
 
 open_device:
 ;   movem.l d1/a1/a6,-(SP)
-;   move.l  iohandler(a5),a1
+;   move.l  bd_iohandler(a5),a1
 ;   moveq #0,d0
-;clear_iohandler_loop:   
+;clear_bd_iohandler_loop:   
 ;   move.b	#0,0(a0,d0)
 ;   addq.w #1,d0
 ;   cmp.w  #IOSTD_SIZE,d0
-;   blt    clear_iohandler_loop
+;   blt    clear_bd_iohandler_loop
 ;   ;device in a6
-;   move.l residentstructure(a5),a6
-;   ;unitnum in d0
-;   move.l unitnum(a5),d0
+;   move.l bd_residentstructure(a5),a6
+;   ;bd_unitnum in d0
+;   move.l bd_unitnum(a5),d0
 ;   ;flags in d1
 ;   move.l #0,d1
-;   ;iohandler in a1
-;   move.l  iohandler(a5),a1
+;   ;bd_iohandler in a1
+;   move.l  bd_iohandler(a5),a1
 ;   CALLLIB LIB_OPEN
 ;   PRINTF 1,<'Open returned %lx',13,10>,D0
-;   move.l  iohandler(a5),a1
-;   move.l  IO_UNIT(a1),unitptr(a5)
+;   move.l  bd_iohandler(a5),a1
+;   move.l  IO_UNIT(a1),bd_unitptr(a5)
 ;   movem.l (SP)+,d1/a1/a6
 ;   rts
 
 	movem.l d1/a3/a1/a6,-(SP)
 	move.l  ABSEXECBASE,a6
-	move.l  unitptr(a5),d0
+	move.l  bd_unitptr(a5),d0
 	bne     unit_allready_there
 	;PRINTF  1,<'Opening unit',13,10>
 	move.l  #MyDevUnit_Sizeof,d0
@@ -456,7 +467,7 @@ open_device:
 unit_allready_there:
 	;PRINTF 1,<'Opend unit at %lx',13,10>,d0
 	move.l   d0,a3
-	move.l   d0,unitptr(a5)
+	move.l   d0,bd_unitptr(a5)
 	
 	;------ default values
 	move.b	#1,mdu_SectorBuffer(a3) ;device must at least handle one sector per read/write
@@ -473,13 +484,13 @@ unit_allready_there:
 	move.w   #TRUE,mdu_motor(a3)     ;units usually start up with motor on
 	move.l   #0,mdu_change_cnt(a3)
 	move.l   #FALSE,mdu_no_disk(a3)
-	move.l   unitnum(a5),d0
+	move.l   bd_unitnum(a5),d0
 	beq      unit_default_init_0
 	;bset.b   #SLAVE_BIT,d0
 	move.b   #$10,d0
 unit_default_init_0:
   PRINTF 1,<'Set Unit Num %ld ',13,10>,d0
-	move.b   d0,mdu_UnitNum(a3)
+	move.b   d0,mdu_bd_unitnum(a3)
 	bsr      InitDrive 
 	move.w   mdu_drv_type(a3),d0
 	PRINTF 1,<'Unit is of type %d ',13,10>,d0
@@ -496,12 +507,12 @@ open_ok;
 
 	
 open_error:   
-	tst.l   unitptr(a5)
+	tst.l   bd_unitptr(a5)
 	beq     open_error_end
-	move.l  unitptr(a5),a1
+	move.l  bd_unitptr(a5),a1
 	move.l  #MyDevUnit_Sizeof,d0
 	CALLSYS FreeMem
-	move.l  #0,unitptr(a5)
+	move.l  #0,bd_unitptr(a5)
 open_error_end:
 	move.l #IOERR_OPENFAIL,d0
   bra    open_ok
@@ -509,21 +520,21 @@ open_error_end:
 close_device
 ;   movem.l a1/a6,-(SP)
 ;   ;device in a6
-;   move.l residentstructure(a5),a6
+;   move.l bd_residentstructure(a5),a6
 ;   ;ihandler in a1
-;   move.l  iohandler(a5),a1
+;   move.l  bd_iohandler(a5),a1
 ;   CALLLIB LIB_CLOSE
 ;  ;PRINTF 1,<'Close retuned %lx',13,10>,D0
 ;   movem.l (SP)+,a1/a6
 ;   rts
 	movem.l d0/a1/a6,-(SP)
 	move.l  ABSEXECBASE,a6
-	tst.l   unitptr(a5)
+	tst.l   bd_unitptr(a5)
 	beq     close_end
-	move.l  unitptr(a5),a1
+	move.l  bd_unitptr(a5),a1
 	move.l  #MyDevUnit_Sizeof,d0
 	CALLSYS FreeMem
-	move.l  #0,unitptr(a5)
+	move.l  #0,bd_unitptr(a5)
 close_end:   
 	movem.l (SP)+,d0/a1/a6
 	rts
@@ -550,7 +561,7 @@ end_of_string_found
 
 	;PRINTF  1,<'String %s has a length of %ld',13,10>,a1,d1
 	;name to look for is in a1!
-	move.l  expansionlib(a5),a6
+	move.l  bd_expansionlib(a5),a6
 patch_dosname_again:
 	lea     eb_MountList(a6),a0 ;find the BootNode entries
 	cmp.l   #0,a0 ;lea does NOT change the status bits!
@@ -589,7 +600,7 @@ next_dos_node:
 	;bne.s  next_dos_node
 	 ;PRINTF  1,<'It is a Boot Node',13,10>
 	;check the name
-	move.l bn_DeviceNode(a0),a2 ;get the device node
+	move.l bn_bd_devicenode(a0),a2 ;get the device node
 	move.l	dn_Name(a2),d0		; get the name (BPTR!)
 	beq    next_dos_node
 	lsl.l	#2,d0			; BPTR address divided by 4! mult*4 gets the address of the BSTR 
@@ -619,12 +630,12 @@ end_FindSameName:
 	IFGE	DEBUG_DETAIL-2	
 print_param_packet:
 	movem.l d0/a0/a3,-(SP)
-	move.l parametermem(a5),a3
+	move.l bd_parametermem(a5),a3
 	move.l	pp_execName(a3),a0
 	PRINTF 1,<'Device: %s ',13,10>,a0
 	move.l  pp_dosName(a3),a0
 	PRINTF 1,<'Dos Name: %s ',13,10>,a0
-	move.l pp_unitNumber(a3),d0
+	move.l pp_bd_unitnumber(a3),d0
 	PRINTF 1,<'Unit: %ld',13,10>,d0
 	move.l pp_flags(a3),d0
 	PRINTF 1,<'Flags: %ld ',13,10>,d0
@@ -652,7 +663,7 @@ print_param_packet:
 	PRINTF 1,<'High cylinder: %ld ',13,10>,d0
 	move.l	pp_numBuffer(a3),d0
 	PRINTF 1,<'Num Buffers: %ld ',13,10>,d0
-	move.l	pp_BufferMemType(a3),d0
+	move.l	pp_bd_buffermemType(a3),d0
 	PRINTF 1,<'Buffer type: %ld ',13,10>,d0
 	move.l	pp_maxTransfer(a3),d0
 	PRINTF 1,<'Max transfer: %lx',13,10>,d0
@@ -686,14 +697,14 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
 	;ATARdWt:
 	;a0 IO data address
 	;a2 #READOPE/#WRITEOPE  operation is either read or write
-	;a3 unitptr
+	;a3 bd_unitptr
 	;d0 io length
 	;d1 io offset low
 	;d5 io offset high  !NEW!!
 	;d2 unit number 
-	move.l unitptr(a5),a3
+	move.l bd_unitptr(a5),a3
 	moveq  #0,d2
-	move.b mdu_UnitNum(a3),d2
+	move.b mdu_bd_unitnum(a3),d2
 	PRINTF 1,<'Reading block %lx on unit %lx',13,10>,d0,d2
 	move.l #READOPE,a2
 	move.l #0,d5
@@ -701,7 +712,7 @@ read_block ;blocknumber in d0, buffer in a0, returns 0 if read is not successful
 	move.l #512,d0
 	;PRINTF 1,<'Call ATRdWt',13,10>
 	move.l   a1,-(sp)
-	move.l   ATARdWtRoutine(a5),a1
+	move.l   bd_ATARdWtRoutine(a5),a1
   jsr      (a1)
   move.l   (sp)+,a1
 	movem.l (SP)+,d0-d7/a0-a6

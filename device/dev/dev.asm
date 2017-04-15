@@ -373,6 +373,17 @@ Expunge:    ;( device: a6 )
 ;	move.l   #ATARdWtLen,d0
 ;	CALLSYS  FreeMem
 ;no_ata_rdwt_relocate:
+;	move.l 	md_task(a5),a1
+; move.l	(a1),d0
+; lea     Task_Begin,a1
+; cmp.l   a1,d0
+; beq.s   no_task_relocate
+;
+; move.l	 d0,a1
+;	move.l   #TaskLen,d0
+;	CALLSYS  FreeMem
+;
+;no_task_relocate:
 ;	;------ free our memory
 ;  CLEAR   d0
 ;  CLEAR   d1
