@@ -305,20 +305,20 @@ setupata
 
 ;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
 ;   bge			kr2
-;	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
-;	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
-;	move.l   mdu_heads(a3),d0           ;LBA support
-;	subq.b   #1,d0
-	;or.b     mdu_UnitNum(a3),d0
+	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
+	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
+	move.l   mdu_heads(a3),d0           ;LBA support
+	subq.b   #1,d0
+	or.b     mdu_UnitNum(a3),d0
 ;	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)
 ;	beq      pis1
 ;	bset     #MDUB_SLAVE,d0
 ;pis1
-;	WATABYTE d0,TF_DRIVE_HEAD
-;	DLY400NS
-;	WAITREADYFORNEWCOMMAND
-;	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-;	WAITNOTBSY d1,d2
+	WATABYTE d0,TF_DRIVE_HEAD
+	DLY400NS
+	WAITREADYFORNEWCOMMAND
+	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
+	WAITNOTBSY d1,d2
 kr2
 	move.l   d4,d1 ;is there a pointer in buffer?
 	tst.l    d1

@@ -139,7 +139,7 @@ checkerrorforthisblock:
 	;DLY400NS
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	;PRINTF 1,<'Data transfered! Status: %d',13,10>,D0
-	AND.l   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
+	AND.b   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
 	beq.s   looptonextblock
 	;check for not busy and then for errors
 	bsr     errorcheck
@@ -182,7 +182,7 @@ errorcheck
 	WAITNOTBSY D2,D3
 	beq.s		erroroccured
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	and.l	  #ERR+DWF,d0 ;leave everything except the Errorbits ->if set this function returns not null
+	and.b	  #ERR+DWF,d0 ;leave everything except the Errorbits ->if set this function returns not null
   rts
 erroroccured:
   move.l #1,d0
@@ -192,36 +192,36 @@ erroroccured:
 setupdrive:
 	WATABYTE d4,TF_SECTOR_COUNT     ;Both: Sectorcount
 	move.l	d6,d0 ;logical block number
-;	cmp.w	 #CHS_ACCESS,mdu_lba(a3)
-;	bne 	 issueLBA
-;
-;	;chs
-;  ;convert block number to Cylinder / Head / Sector numbers
-;	; Cyl go to D0
-;	; Head to D2
-;	; Sec to d1
-;	
-;	move.l	d0,d1				 ;d0 = number of block (block numbers begin from 0)
-;	move.l	mdu_sectors_per_track(a3),d2
-;	divu	  d2,d1
-;	move.l	d1,d0
-;	swap	  d1
-;	addq.w  #1,d1				 ;sector numbers begin at 1
-;	and.l	  #$ff,d1			 ;sector number byte
-;	;now the cylinder we copied the result of the division above to d0! 
-;	and.l	  #$ffff,d0			;16bit word
-;	move.l	mdu_heads(a3),d2
-;	divu	  d2,d0				 ;d0 = cyl
-;	move.l	d0,d2
-;	swap	  d2					 ;d2 = head
-;	WATABYTE d0,TF_CYLINDER_LOW
-;	lsr.l	 #8,d0
-;	WATABYTE d0,TF_CYLINDER_HIGH
-;	WATABYTE d1,TF_SECTOR_NUMBER
-;
-;	bra.s	 setupdriveend
-;
-;issueLBA;
+	cmp.w	 #CHS_ACCESS,mdu_lba(a3)
+	bne 	 issueLBA
+
+	;chs
+  ;convert block number to Cylinder / Head / Sector numbers
+	; Cyl go to D0
+	; Head to D2
+	; Sec to d1
+	
+	move.l	d0,d1				 ;d0 = number of block (block numbers begin from 0)
+	move.l	mdu_sectors_per_track(a3),d2
+	divu	  d2,d1
+	move.l	d1,d0
+	swap	  d1
+	addq.w  #1,d1				 ;sector numbers begin at 1
+	and.l	  #$ff,d1			 ;sector number byte
+	WATABYTE d1,TF_SECTOR_NUMBER
+	;now the cylinder we copied the result of the division above to d0! 
+	and.l	  #$ffff,d0			;16bit word
+	move.l	mdu_heads(a3),d2
+	divu	  d2,d0				 ;d0 = cyl
+	move.l	d0,d2
+	swap	  d2					 ;d2 = head
+	WATABYTE d0,TF_CYLINDER_LOW
+	lsr.l	 #8,d0
+	WATABYTE d0,TF_CYLINDER_HIGH
+
+	bra.s	 setupdriveend
+
+issueLBA;
 
   ; d0 holds the LBA, but we have to convert it to:
 	; d0 = LOW /MidByte :LBA 0..15
@@ -230,12 +230,12 @@ setupdrive:
 	
   move.l d0,d1       ; make a copy of d0
   swap   d1          ; put the highlba (16..27) to the lower part
+	WATABYTE d1,TF_LBA_HIGH_BYTE		;LBA  bits  16..23 
   move.l d1,d2       ; make a copy in d2
   lsr.l	 #8,d2       ; rotate LBA 16..23 away: D2 holds lba bitrs 24..27 now!
 	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA: bits  0..7  
 	lsr.l	 #8,d0
 	WATABYTE d0,TF_LBA_MID_BYTE			;LBA: bits  8..15  
-	WATABYTE d1,TF_LBA_HIGH_BYTE		;LBA  bits  16..23 
 
 setupdriveend:
 	and.l	 #$f,d2      ; mask LBA: bits 24..27 / CHS: head count
