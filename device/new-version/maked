@@ -8,8 +8,8 @@ delete /debug/debug-wrapper.o
 delete /dev/bootstrap.o
 delete ide.device
 delete bootide.device
-assign i: Amiga:NDK_3.1/INCLUDES_LIBS/INCLUDE_I
-assign i2: Amiga:AIDE/device
+assign i: Work:ADK2.1/NDK/NDK_3.9/INCLUDE/INCLUDE_I
+assign i2: PC-HDD:Softwarehacks/AIDE/device
 /bin/a68k -ii: -ii2: /dev/dev.asm   ; main source of exec device
 /bin/a68k -ii: -ii2: /rdwt/rdwt.asm ; read/write routines of device
 /bin/a68k -ii: -ii2: /rdwt/init.asm ; init routines of device

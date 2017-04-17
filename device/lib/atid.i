@@ -29,7 +29,7 @@ TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
 
 
 LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   3000000      ; timeout value for ATA - motor is on
+LOOP  equ   512000      ; timeout value for ATA - motor is on
 LOOP2 equ   5120000     ; timeout value for ATA - motor is off
 LOOP3 equ   512000       ; timeout value for ATAPI
 TESTBYTE1 equ $B0
@@ -83,46 +83,37 @@ WATAWORD macro
 
 WAITNOTDRQ macro
    move.l   #LOOP,\2
-   bra.s    wqdstart\@
 wqd\@ 
-   DLY3US
-   subq.l   #1,\2
-   beq.s    wqd1\@
-wqdstart\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #DRQ,\1
-   bne.s    wqd\@
+   beq.s    wqd1\@
+   DLY3US   ; make a processor speed independent minimum delay
+   dbra			\2,wqd\@ 
 wqd1\@
    tst.l    \2
  endm
 
 WAITNOTBSY macro
    move.l   #LOOP,\2
-   bra.s    wnstart\@
 wn\@ 
-   DLY3US
-   subq.l   #1,\2
-   beq.s    wn1\@
-wnstart\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #BSY,\1
-   bne.s    wn\@
+   beq.s    wn1\@
+   DLY3US   ; make a processor speed independent minimum delay
+   dbra     \2,wn\@
 wn1\@
    tst.l    \2
  endm
 
 WAITDRQ macro
    move.l   #LOOP,\2
-   bra.s    wdstart\@
 wd\@ 
-   DLY3US
-   subq.l   #1,\2
-   beq.s    wd1\@
-wdstart\@ 
    RATABYTE TF_ALTERNATE_STATUS,\1
    and.b    #BSY+DRQ,\1
    cmp.b    #DRQ,\1
-   bne.s    wd\@
+   beq.s    wd1\@
+   DLY3US   ; make a processor speed independent minimum delay
+   dbra     \2,wd\@
 wd1\@
    tst.l    \2
  endm
