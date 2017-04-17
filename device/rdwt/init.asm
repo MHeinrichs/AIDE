@@ -224,26 +224,26 @@ multiple_sector_dis
 	move.w   61*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
 	swap   d0
 	or.w     60*2(a5),d0
-	and.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
+	;and.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
 	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
 	beq      nolba                ;propably no lba support if no lba sectors
 	move.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
 	or.b     #$A0+L,mdu_UnitNum(a3);set the LBA-bit in the unit number
-	;move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
-	;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
-	;bra		endauto				 ; saty at LBA28
-	;move.l   100*2(a5),d0         ;3rd word LBA48
-	;swap   d0
-	;or.w     101*2(a5),d0		 ;4th word LBA48
-	;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
-	;move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
-	;;now the lower 32 bits
-	;move.l   102*2(a5),d0         ;1st word LBA48
-	;swap   d0
-	;or.w     103*2(a5),d0		 ;2nd word LBA48
-	;beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
-	;move.l   d0,mdu_numlba(a3)    ;store to internal buffer
-	;move.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
+	move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
+	and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
+	bra		endauto				 ; saty at LBA28
+	move.l   100*2(a5),d0         ;3rd word LBA48
+	swap   d0
+	or.w     101*2(a5),d0		 ;4th word LBA48
+	beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
+	move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
+	;now the lower 32 bits
+	move.l   102*2(a5),d0         ;1st word LBA48
+	swap   d0
+	or.w     103*2(a5),d0		 ;2nd word LBA48
+	beq		endauto				 ;LBA48 supported but <8GB: stay at LBA28!
+	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
+	move.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
 	bra      endauto
 nolba                            ;Then its CHS
 	move.w   #CHS_ACCESS,mdu_lba(a3)   ;store to internal buffer

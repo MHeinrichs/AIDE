@@ -69,13 +69,15 @@ ATARdWt:
 	ror.l	#1,d4			  ;
 	or.l	d4,d1			  ;d1 holds now the start block!
 	move.l	d1,d4			  ;now copy d1 to d4
-	add.l	d3,d4			  ;add the blocks in d3 to transfer and see if we hit the boundary
+	add.l	d4,d3			  ;add the max block to transfer and see if we hit the boundary
 	bcs  	Quits			  ;overflow!>quit	
 	;cmp.w	 #LBA48_ACCESS,mdu_lba(a3) ;is it a LBA48 drive, this should be able to handle 32bit addresses ;)?		
 	;beq	transfer		  ;everything is ok!
-	and.l	#$F0000000,d4	  ; just the first 28 bits set?
+	and.l	#$F0000000,d3	  ; just the first 28 bits set?
 	bne 	Quits			  ; nope: Quit!
 transfer
+	AND.l	#$F0000000,d3	  ; just the first 28 bits set?->LBA28 on lba48 drives
+
 	move.l	a0,a5				 ;Start address
 	move.l	d1,d6				 ;Start block
 	move.l	d3,d7				 ;# blocks
@@ -91,7 +93,7 @@ transfer
 	;d0 = free
 	;d1 = free
 	;d2 = free
-	;d3 = free
+	;d3 = LBA28 indicator
 	;d4 = free -> counter for sector
 	;d5 = free -> number of sectors per read/write
 	;d6 = blockoffset to write to
@@ -110,10 +112,8 @@ maskd4done
 	WAITREADYFORNEWCOMMAND D0,D1
 	bsr    setupdrive ;this routine destroys d0-D3
 	;PRINTF 1,<'Drive set up complete!',13,10>
-	;now we enter the time critical path. 
-	;No interrupt OR taskswitch should disturb us now!
-	;FORBID
-	;DISABLE
+	;cmp.l	 #0,D3 ;D3 holds the info if we access >lba28
+	;bne.s  command48
 	cmp.l	 #READOPE,a2
 	beq 	 wasread
 	;Format or Write
@@ -121,13 +121,22 @@ maskd4done
   bra.s   do_command
 wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
+;  bra.s   do_command
+;command48
+;	CMP.l	 #READOPE,a2
+;	beq 	 wasread48
+;	;Format or Write
+;  WATABYTE #ATA_WRITE_SECTORS_EXT,TF_COMMAND
+;  bra.s   do_command
+;wasread48
+;	WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND	
 
 do_command:  
 	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	;PRINTF 1,<'Command issued Status: %d',13,10>,D0
 	sub.l	 #1,d4				 ;for dbne	
 nextoneblock
-	WAITDRQ	D2,D3
+	WAITDRQ	D0,D1
 	beq     errcode
 	cmp.l	  #READOPE,a2
 	beq.s   read_block
@@ -148,10 +157,6 @@ checkerrorforthisblock:
 looptonextblock	
 	dbne	  d4,nextoneblock
 sectoracok
-	;now we leave the time critical path. 
-	;enable interrupt AND taskswitch
-	;ENABLE
-	;PERMIT
 
 	;PRINTF 1,<'Next transfer. Remaining: %ld-%ld',13,10>,D7,D5
 	add.l	 d5,d6					 ;next block number
@@ -190,6 +195,9 @@ erroroccured:
 
 ;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d3 on the way
 setupdrive:
+;	cmp.l	 #0,D3 ;D3 holds the info if we access >lba28
+;	bne 	 issueLBA48
+
 	WATABYTE d4,TF_SECTOR_COUNT     ;Both: Sectorcount
 	move.l	d6,d0 ;logical block number
 	cmp.w	 #CHS_ACCESS,mdu_lba(a3)
@@ -221,7 +229,7 @@ setupdrive:
 
 	bra.s	 setupdriveend
 
-issueLBA;
+issueLBA:
 
   ; d0 holds the LBA, but we have to convert it to:
 	; d0 = LOW /MidByte :LBA 0..15
@@ -243,6 +251,40 @@ setupdriveend:
 	; write head to the drive!
 	WATABYTE d2,TF_DRIVE_HEAD			  
   rts
+  
+;issueLBA48:
+;	cmp.b   #0,D4
+;	bne.s   lba48sec0
+;	WATABYTE #1,TF_SECTOR_COUNT     ;write a 1 for 256 sectors
+;	bra.s lba48secdone
+;lba48sec0:
+;	WATABYTE #0,TF_SECTOR_COUNT     ;write a 0 for >256 sectors	
+;lba48secdone:	
+;	WATABYTE d4,TF_SECTOR_COUNT     
+;	move.l	d6,d0 ;logical block number
+;
+;  ; d0 holds the LBA, but we have to convert it to:
+;	; d0 = LOW /MidByte :LBA 0..15
+;	; D1 = HIGH BYTE    :LBA 16..27
+;	; d2=  :LBA 24..31
+;	
+;  move.l d0,d1       ; make a copy of d0
+;  swap   d1          ; put the highlba (16..27) to the lower part
+;	WATABYTE #0,TF_LBA_HIGH_BYTE		;LBA  bits  40..47
+;	WATABYTE d1,TF_LBA_HIGH_BYTE		;LBA  bits  16..23 
+;  move.l d1,d2       ; make a copy in d2
+;  lsr.l	 #8,d2       ; rotate LBA 16..23 away: D2 holds lba bits 24..31 now!
+;	WATABYTE D2,TF_LBA_LOW_BYTE		  ;LBA: bits  25..31  
+;	WATABYTE d0,TF_LBA_LOW_BYTE		  ;LBA: bits  0..7  
+;	lsr.l	 #8,d0
+;	WATABYTE #0,TF_LBA_MID_BYTE 		;LBA  bits  32..39
+;	WATABYTE d0,TF_LBA_MID_BYTE			;LBA: bits  8..15  
+;
+;	move.b	 mdu_UnitNum(a3),d2 ; set slave and LBA-bit
+;	; write head to the drive!
+;	WATABYTE d2,TF_DRIVE_HEAD			  
+;  rts
+  
   
   Public ATARdWtLen
 ATARdWtLen = *-ATARdWt
