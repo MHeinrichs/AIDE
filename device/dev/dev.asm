@@ -174,37 +174,37 @@ init1
 ;  cmp.l  #$A00000,a0
 ;  bgt.s  relocate_atardwt
 ;  bra.s  end_relocate_atardwt ;already in the right piece of fastram!
-relocate_atardwt  
-	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
-  CALLSYS AllocMem
-  tst.l  d0
-  beq.s  end_relocate_atardwt
-  move.l d0,md_ATARdWt(a5)
-  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
-  lea    ATARdWt,a0
-	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
-  move.l md_ATARdWt(a5),a1
-  CALLSYS CopyMem
-  cmpi.w #37,LIB_VERSION(a6)
-  blt.s end_relocate_atardwt
-  CALLSYS CacheClearU
-end_relocate_atardwt:
-relocate_task:
-	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
-	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
-  CALLSYS AllocMem
-  tst.l  d0
-  beq.s  end_relocate_task
-  move.l d0,md_task(a5)
-  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
-  lea    Task_Begin,a0
-	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
-  move.l md_task(a5),a1
-  CALLSYS CopyMem
-  cmpi.w #37,LIB_VERSION(a6)
-  blt.s end_relocate_task
-  CALLSYS CacheClearU
+;relocate_atardwt  
+;	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+;	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
+;  CALLSYS AllocMem
+;  tst.l  d0
+;  beq.s  end_relocate_atardwt
+;  move.l d0,md_ATARdWt(a5)
+;  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
+;  lea    ATARdWt,a0
+;	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
+;  move.l md_ATARdWt(a5),a1
+;  CALLSYS CopyMem
+;  cmpi.w #37,LIB_VERSION(a6)
+;  blt.s end_relocate_atardwt
+;  CALLSYS CacheClearU
+;end_relocate_atardwt:
+;relocate_task:
+;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
+;	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
+;  CALLSYS AllocMem
+;  tst.l  d0
+;  beq.s  end_relocate_task
+;  move.l d0,md_task(a5)
+;  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
+;  lea    Task_Begin,a0
+;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
+;  move.l md_task(a5),a1
+;  CALLSYS CopyMem
+;  cmpi.w #37,LIB_VERSION(a6)
+;  blt.s end_relocate_task
+;  CALLSYS CacheClearU
 end_relocate_task:
 
 
@@ -302,8 +302,8 @@ Close:      ;( device:a6, iob:a1 )
 	;------ see if the unit is still in use
 	SUBQ.w   #1,UNIT_OPENCNT(a3)
 
-  ;bne.s    Close_Device
-  ;bsr      ExpungeUnit
+ 	;BNE.s    Close_Device
+  ;BSR      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
@@ -786,19 +786,19 @@ MyMotor:                               ;park drive heads and stop motor
 	move.l   d0,IO_ACTUAL(a1)			;copy a long to IO_ACTUAL(a1)
 	tst.l    IO_LENGTH(a1)
 	bne      mtr1
-	WAITNOTBSY d1,d2
+	WAITNOTBSY D0
 	beq      mtr1
 	moveq    #0,d0
 	move.b   mdu_UnitNum(a3),d0
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY5US
 	WATABYTE #ATA_RECALIBRATE,TF_COMMAND
-	WAITNOTBSY d1,d2
+	WAITNOTBSY D1
 	beq      mtr1
 	WATABYTE d0,TF_DRIVE_HEAD
 	DLY5US
 	WATABYTE #ATA_STANDBY_IMMEDIATE,TF_COMMAND
-	WAITNOTBSY d1,d2
+	WAITNOTBSY D1
 	RATABYTE TF_STATUS,d0
 	move.w   #FALSE,mdu_motor(a3)
 mtr1
