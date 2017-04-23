@@ -72,20 +72,24 @@ ATARdWt:
 	add.l	d3,d4			  ;add the max block to transfer and see if we hit the boundary
 	bcs  	Quits			  ;overflow!>quit	
 	CMP.w	 #LBA48_ACCESS,mdu_lba(a3) ;is it a LBA48 drive, this should be able to handle 32bit addresses ;)?		
-	beq	  transfer		  ;everything is ok!
+	beq	  transfer48		  ;everything is ok!
 	and.l	#$F0000000,d4	  ; just the first 28 bits set?
 	bne 	Quits			  ; nope: Quit!
+LBA28transferpossible:
+	move.l	d3,d7				 ;# blocks
+	MOVEQ.l	#0,D3
+	bra.s transfer
+transfer48	
+	AND.l	#$F0000000,d4	  ; just the first 28 bits set?->LBA28 on lba48 drives
+	BEQ.s  LBA28transferpossible	
+	move.l	d3,d7				 ;# blocks
+	MOVE.b #LBA48_ACCESS,D3
 transfer
 		
 	move.l	a0,a5				 ;Start address
 	move.l	d1,d6				 ;Start block
-	move.l	d3,d7				 ;# blocks
 	move.l  ABSEXECBASE,A6 ;exec base into A6 for enable/disable
-	;MOVEQ.l	#0,D3
-	;AND.l	#$F0000000,d4	  ; just the first 28 bits set?->LBA28 on lba48 drives
-	;BEQ.s  LBA28transferpossible	
-	;MOVE.b #LBA48_ACCESS,D3
-LBA28transferpossible:
+	
 	;register sum up:
 	;a0 = free (start address)
 	;a1 = free
@@ -116,8 +120,8 @@ maskd4done
 	WAITREADYFORNEWCOMMAND D0,D1
 	bsr    setupdrive ;this routine destroys d0-D2
 	;PRINTF 1,<'Drive set up complete!',13,10>
-	;CMP.b	 #LBA48_ACCESS,D3 ;D3 holds the info if we access >lba28
-	;BEQ.s  command48
+	CMP.b	 #LBA48_ACCESS,D3 ;D3 holds the info if we access >lba28
+	BEQ.s  command48
 	cmp.l	 #READOPE,a2
 	beq 	 wasread
 	;Format or Write
@@ -125,16 +129,16 @@ maskd4done
   bra.s   do_command
 wasread
 	WATABYTE #ATA_READ_SECTORS,TF_COMMAND	
-;  bra.s   do_command
-;command48
-;	CMP.l	 #READOPE,a2
-;	BEQ 	 wasread48
-;	;Format or Write
-;  WATABYTE #ATA_WRITE_SECTORS_EXT,TF_COMMAND
-;  bra.s   do_command
-;wasread48
-;	WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND	
-;
+  bra.s   do_command
+command48
+	CMP.l	 #READOPE,a2
+	BEQ 	 wasread48
+	;Format or Write
+  WATABYTE #ATA_WRITE_SECTORS_EXT,TF_COMMAND
+  bra.s   do_command
+wasread48
+	WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND	
+
 do_command:  
 	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	;PRINTF 1,<'Command issued Status: %d',13,10>,D0
@@ -200,8 +204,8 @@ erroroccured:
 
 ;this routine sets all importaint information like master/slave, chs/lba and destroys d0-d2 on the way
 setupdrive:
-	;CMP.b	 #LBA48_ACCESS,D3 ;D3 holds the info if we access >lba28
-	;BEQ 	 issueLBA48	
+	CMP.b	 #LBA48_ACCESS,D3 ;D3 holds the info if we access >lba28
+	BEQ 	 issueLBA48	
 	cmp.w	 #CHS_ACCESS,mdu_lba(a3)
 	bne 	 issueLBA
 
@@ -281,8 +285,8 @@ lba48secdone:
 	; d0 = LOW /MidByte :LBA 0..15
 	; D1 = HIGH BYTE    :LBA 16..27
 	; d2=  :LBA 24..31
-	
-  move.l d0,d1       ; make a copy of d0
+	move.l d6,d0 		   ;logical block number to d0 and d1
+  move.l D6,d1       
   swap   d1          ; put the highlba (16..27) to the lower part
   move.l d1,d2       ; make a copy in d2
   lsr.l	 #8,d2       ; rotate LBA 16..23 away: D2 holds lba bits 24..31 now!

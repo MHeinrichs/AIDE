@@ -177,8 +177,8 @@ initRoutine:
 ;	move.l	 mdu_timeinterrupt(A3),MP_SIGTASK(A1); pointer to interrupt vector
 ;	move.b	 #NT_MSGPORT,LN_TYPE(a1)	;it's a simple message port
 	
-	lea	    MP_MSGLIST(a1),a0
-	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
+;	lea	    MP_MSGLIST(a1),a0
+;	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
 									;work magic on them before use.  (AddPort()
 									;can do this for you)
 

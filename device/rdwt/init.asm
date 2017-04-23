@@ -224,7 +224,7 @@ multiple_sector_dis
 	move.w   61*2(a5),d0          ;Words 60-61 # of user addressable sectors (LBA)
 	swap   d0
 	or.w     60*2(a5),d0
-	and.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
+	;and.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
 	CMP.l    #$0FFFFFFF,d0        ;allow only 128GB = LBA28-access!
 	BLE.s    lba28ok
 	MOVE.l   #$0FFFFFFF,d0
@@ -233,33 +233,33 @@ lba28ok:
 	beq      nolba                ;propably no lba support if no lba sectors
 	MOVE.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
 	or.b     #$A0+L,mdu_UnitNum(a3);set the LBA-bit in the unit number
-	;move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
-	;and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
-	;bra		endauto				 ; stay at LBA28
-	;MOVE.w   103*2(a5),d0         ;4th word LBA48
-	;SWAP   d0
-	;OR.w     102*2(a5),d0		 ;3rd word LBA48
-	;tst.l		 D0
-	;beq			 lba32				 ;no lba48?!?-> goto lba32
+	move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
+	and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
+	beq		   endauto				 ; stay at LBA28
+;	MOVE.w   103*2(a5),d0         ;4th word LBA48
+;	SWAP   d0
+;	OR.w     102*2(a5),d0		 ;3rd word LBA48
+;	TST.l		 D0
+;	beq			 lba32				 ;no lba48?!?-> goto lba32
 	;currently I support only "LBA32"
-	;MOVE.l   #$FFFFFFFF,D0  ;store max value to size register
-	;bra.s		   lba48fine				 
-;lba32:	
-;	;now the lower 32 bits
-;	move.w   101*2(a5),d0         ;2nd word LBA48
-;	swap   d0
-;	or.w     100*2(a5),d0		 ;1st word LBA48
-;	tst.l		 D0
-;	bne			 lba48fine				 ;something
-;	;currently I support only "LBA32"
 ;	MOVE.l   #$FFFFFFFF,D0  ;store max value to size register
-;lba48fine:
-;	move.l   d0,mdu_numlba48(a3)  ;store to internal buffer
-;	and.l		 #$F0000000,D0         ;>128GB?
-;	beq		endauto				 ;LBA48 supported but <128GB: stay at LBA28!
-;	MOVE.l   mdu_numlba48(a3),D0  ;restore from internal buffer
-;	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
-;	move.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
+;	BRA.s		   lba48fine				 
+lba32:	
+	;now the lower 32 bits
+	MOVE.w   101*2(a5),d0         ;2nd word LBA48
+	SWAP   d0
+	OR.w     100*2(a5),d0		 ;1st word LBA48
+;	TST.l		 D0
+;	bne			 lba48fine				 ;something
+	;currently I support only "LBA32"
+;	MOVE.l   #$FFFFFFFF,D0  ;store max value to size register
+lba48fine:
+	MOVE.l   d0,mdu_numlba48(a3)  ;store to internal buffer
+	AND.l		 #$F0000000,D0         ;>128GB?
+	beq		endauto				 ;LBA48 supported but <128GB: stay at LBA28!
+	MOVE.l   mdu_numlba48(a3),D0  ;restore from internal buffer
+	MOVE.l   d0,mdu_numlba(a3)    ;store to internal buffer
+	MOVE.w   #LBA48_ACCESS,mdu_lba(a3)    ;store to internal buffer	   
 	BRA      endauto
 nolba                            ;Then its CHS
 	move.w   #CHS_ACCESS,mdu_lba(a3)   ;store to internal buffer
