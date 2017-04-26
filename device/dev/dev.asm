@@ -166,15 +166,9 @@ init1
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
   PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
-  lea    Task_Begin,a0
+  lea    cmdtable,a0
   move.l a0,md_task(a5)
-  PRINTF 1,<'Original Task    Position: %lx',13,10>,a0
-;  cmp.l  #$600000,a0
-;  blt.s  relocate_atardwt
-;  cmp.l  #$A00000,a0
-;  bgt.s  relocate_atardwt
-;  bra.s  end_relocate_atardwt ;already in the right piece of fastram!
-;relocate_atardwt  
+;  PRINTF 1,<'Original Task    Position: %lx',13,10>,a0
 ;	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
 ;	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
 ;  CALLSYS AllocMem
@@ -186,9 +180,6 @@ init1
 ;	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
 ;  move.l md_ATARdWt(a5),a1
 ;  CALLSYS CopyMem
-;  cmpi.w #37,LIB_VERSION(a6)
-;  blt.s end_relocate_atardwt
-;  CALLSYS CacheClearU
 ;end_relocate_atardwt:
 ;relocate_task:
 ;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
@@ -202,11 +193,11 @@ init1
 ;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
 ;  move.l md_task(a5),a1
 ;  CALLSYS CopyMem
-;  cmpi.w #37,LIB_VERSION(a6)
-;  blt.s end_relocate_task
+;end_relocate_task:
+;  cmpi.w #37,LIB_VERSION(a6) ;Kick1.3?
+;  blt.s end_relocate ;yes= No Cache clear function available!
 ;  CALLSYS CacheClearU
-end_relocate_task:
-
+;end_relocate
 
 	move.l   a5,d0
 	bra      init_end
@@ -379,7 +370,7 @@ go_ahead_expunge:
 no_ata_rdwt_relocate:
 	move.l 	md_task(a5),a1
  move.l	(a1),d0
- lea     Task_Begin,a1
+ lea     cmdtable,a1
  cmp.l   a1,d0
  beq.s   no_task_relocate
 
@@ -467,7 +458,8 @@ no_name_change:
 
 ;   Startup the task
 	lea	     mdu_tcb(a3),a1
-	move.l   md_task(A6),a2
+	move.l   md_task(A6),A2
+	adda     #(Task_Begin-cmdtable),A2
 	;lea			 Task_Begin(pc),A2
 	move.l   a3,-(sp)      ; Preserve UNIT pointer
 	lea	    -1,a3	  ; generate address error
@@ -720,25 +712,16 @@ BeginIO_NoCmd:
 ; a1 has the io request.  Bounds checking has already been done on
 ; the io request.
 PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
-	;move.l   a2,-(sp)
-	;move.l   a1,a2
-;	;now start the timer
-;	move.l   A1,-(sp)	
-;	MOVE.l	 #30000,mdu_timeout(A3) ; io must complete in 30 sec!
-;	MOVE.l   mdu_timerequest(A3),A1
-;	jsr  		 _BeginIO
-;	move.l   (sp)+,A1
-
-	moveq    #0,d0                ;clear D0
+	MOVE.l   a0,-(sp)
+	MOVEQ    #0,d0                ;clear D0
 	clr.b    IO_ERROR(A1)         ;No error so far
 	move.w   IO_COMMAND(A1),d0
 	lsl      #2,d0                ;Multiply by 4 to get table offset
 	lea      cmdtable(pc),a0
 	move.l   0(a0,d0.w),a0
 	jsr      (a0) ; JSR TO THE ADDRESS WE READ FROM THE CMD TABLE
-	;move.l   (sp)+,a2
-;	MOVE.l	 #0,mdu_timeout(A3) ;disable the timeoutint
-	rts
+	MOVE.l   (sp)+,A0
+	RTS
 
 
 ; TermIO sends the IO request back to the user.  It knows not to mark
@@ -1236,7 +1219,7 @@ Task_NextMessage:
 
     bra.s   Task_NextMessage
 ;  Public TaskLen
-TaskLen = *-Task_Begin    
+TaskLen = *-cmdtable    
  
 ;  ;; unit pointer in a1
 ;TimeoutServer:

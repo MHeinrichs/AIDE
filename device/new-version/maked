@@ -16,9 +16,11 @@ assign i2: PC-HDD:Softwarehacks/AIDE/device
 /bin/a68k -ii: -ii2: /debug/debug-wrapper.asm   ; debug routine
 /bin/a68k -ii: -ii2: /dev/bootstrap.asm   ; main source of boot device
 
-/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
+/bin/dlink -o ide.device /dev/dev.o /rdwt/rdwt.o /rdwt/init.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib
 ;/bin/dlink -o ide.device /dev/dev.o /rdwt/init.o /rdwt/rdwt.o /lib/amiga31.lib
 /bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /debug/debug-wrapper.o /lib/debug.lib /lib/amiga31.lib 
 ;/bin/dlink -o bootide.device /dev/bootstrap.o /rdwt/init.o /lib/amiga31.lib 
 assign IDE_BASE_ADDRESS: remove
 assign i: remove
+assign i2: remove
+copy #?.device devs:
