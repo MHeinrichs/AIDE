@@ -223,15 +223,19 @@ Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
 	;------ see if the unit number is in range
 	moveq    #0,d3
 	cmp.l    #10,d0                  ;convert: scsi unit 10 = dos unit 1
-	bne      opn1
+	beq      opn1
+	cmp.l    #1,d0                   ;convert: scsi unit 1 = dos unit 1
+	beq      opn1
+	cmp.l    #0,d0                  ;convert: scsi unit 0 = dos unit 0
+	beq      opn0
+	bra			 Open_Error
+opn1
 	move.l   #4,d3                   ;set offset for unit table
 	moveq    #0,d0
 	move.b   #1,d0
-opn1
+opn0
 	moveq    #0,d2
 	move.b   d0,d2                   ; save unit number
-	cmp.b    #MD_NUMUNITS,d0         ;Allow unit numbers 0 and 1.
-	bge      Open_Error              ;unit number is out of range
   PRINTF 1,<' Opening unit: %lx offset %ld',13,10>,d0,d3
 	
 	;------ see if the unit is already initialized
@@ -302,8 +306,8 @@ Close:      ;( device:a6, iob:a1 )
 	;------ see if the unit is still in use
 	SUBQ.w   #1,UNIT_OPENCNT(a3)
 
- 	;BNE.s    Close_Device
-  ;BSR      ExpungeUnit
+ 	BNE.s    Close_Device
+  BSR      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
@@ -338,66 +342,66 @@ Close_End:
 ;
 
 Expunge:    ;( device: a6 )
-;
-;	movem.l  d1/d2/a5/a6,-(sp)
-;
-;	move.l   a6,a5
-;
-;	move.l   md_SysLib(a5),a6
-;	;------ see if anyone has us open
-;  tst.w    LIB_OPENCNT(a5)
-;
-;  beq      go_ahead_expunge
-;	;------ it is still open.  set the delayed expunge flag
-;  bset     #LIBB_DELEXP,md_Flags(a5)
-;  CLEAR    d0
-;  bra.s    Expunge_End
-;go_ahead_expunge:
-;	;------ go ahead and get rid of us.  Store our seglist in d2
-;  move.l   md_SegList(a5),d2
-;	;------ unlink from device list
-;  move.l   a5,a1
-;  CALLSYS  Remove
-;  move.l   md_DosLib(a5),a1
-;  CALLSYS  CloseLibrary
-;
-;
-;	;device specific closings here...
-;	move.l 	md_ATARdWt(a5),a1
-;  move.l	(a1),d0
-;  lea     ATARdWt,a1
-;  cmp.l   a1,d0
-;  beq.s   no_ata_rdwt_relocate
-;
-;  move.l	 d0,a1
-;	move.l   #ATARdWtLen,d0
-;	CALLSYS  FreeMem
-;no_ata_rdwt_relocate:
-;	move.l 	md_task(a5),a1
-; move.l	(a1),d0
-; lea     Task_Begin,a1
-; cmp.l   a1,d0
-; beq.s   no_task_relocate
-;
-; move.l	 d0,a1
-;	move.l   #TaskLen,d0
-;	CALLSYS  FreeMem
-;
-;no_task_relocate:
-;	;------ free our memory
-;  CLEAR   d0
-;  CLEAR   d1
-;  move.l   a5,a1
-;  move.w   LIB_NEGSIZE(a5),d1
-;  sub.w    d1,a1
-;  add.w    LIB_POSSIZE(a5),d0
-;  add.l    d1,d0
-;  CALLSYS  FreeMem
-;	;------ set up our return value
-;	move.l   d2,d0
-;Expunge_End:
-;  movem.l  (sp)+,d1/d2/a5/a6
-;  rts
+
+	movem.l  d1/d2/a5/a6,-(sp)
+
+	move.l   a6,a5
+
+	move.l   md_SysLib(a5),a6
+	;------ see if anyone has us open
+  tst.w    LIB_OPENCNT(a5)
+
+  beq      go_ahead_expunge
+	;------ it is still open.  set the delayed expunge flag
+  bset     #LIBB_DELEXP,md_Flags(a5)
+  CLEAR    d0
+  bra.s    Expunge_End
+go_ahead_expunge:
+	;------ go ahead and get rid of us.  Store our seglist in d2
+  move.l   md_SegList(a5),d2
+	;------ unlink from device list
+  move.l   a5,a1
+  CALLSYS  Remove
+  move.l   md_DosLib(a5),a1
+  CALLSYS  CloseLibrary
+
+
+	;device specific closings here...
+	move.l 	md_ATARdWt(a5),a1
+  move.l	(a1),d0
+  lea     ATARdWt,a1
+  cmp.l   a1,d0
+  beq.s   no_ata_rdwt_relocate
+
+  move.l	 d0,a1
+	move.l   #ATARdWtLen,d0
+	CALLSYS  FreeMem
+no_ata_rdwt_relocate:
+	move.l 	md_task(a5),a1
+ move.l	(a1),d0
+ lea     Task_Begin,a1
+ cmp.l   a1,d0
+ beq.s   no_task_relocate
+
+ move.l	 d0,a1
+	move.l   #TaskLen,d0
+	CALLSYS  FreeMem
+
+no_task_relocate:
+	;------ free our memory
+  CLEAR   d0
+  CLEAR   d1
+  move.l   a5,a1
+  move.w   LIB_NEGSIZE(a5),d1
+  sub.w    d1,a1
+  add.w    LIB_POSSIZE(a5),d0
+  add.l    d1,d0
+  CALLSYS  FreeMem
+	;------ set up our return value
+	move.l   d2,d0
+Expunge_End:
+  movem.l  (sp)+,d1/d2/a5/a6
+  rts
 
 Null:
 	moveq    #0,d0
@@ -1275,8 +1279,8 @@ mdu_Init:
 	INITLONG mdu_cylinders,0
 	INITLONG mdu_numlba,0
 	INITLONG mdu_numlba48,0
-	INITLONG mdu_no_disk,0
-	INITLONG mdu_change_cnt,FALSE
+	INITLONG mdu_no_disk,1
+	INITLONG mdu_change_cnt,0
 	INITSTRUCT 0,mdu_EmulInquiry,0,8
 	DC.L		 $00000001
 	DC.L		 $1F000000

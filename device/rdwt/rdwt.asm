@@ -406,7 +406,8 @@ readyforpacket:
 	WATABYTE d1,TF_CYLINDER_LOW
 	lsr.w	 #8,d1
 	WATABYTE d1,TF_CYLINDER_HIGH
-	WATABYTE #nIEN+8,TF_DEVICE_CONTROL
+	;WATABYTE #nIEN+8,TF_DEVICE_CONTROL
+	WATABYTE #0,TF_FEATURES
 	WAITNOTBSY D0
 	beq		pretec
 	WATABYTE #ATA_PACKET,TF_COMMAND	  ;send packet command
@@ -436,9 +437,6 @@ pa2
 pa3
 	move.l	#LOOP3,d2						;wait to packet execution result
 pa4
-	subq.l	#1,d2
-	beq		pretec
-	bsr		pause
 	RATABYTE TF_ALTERNATE_STATUS,d0
 	btst	  #BSY_BIT,d0
 	bne.s	 pa4
@@ -448,7 +446,9 @@ pa4
 	bne		pa5
 	cmp.b	 #3,d1
 	beq.s	 pa6
-	DLY5US
+	subq.l	#1,d2
+	beq		pretec
+	bsr		pause
 	bra		pa4
 pa5
 	btst	  #0,d1
@@ -525,7 +525,8 @@ pause
 	move.l	#LOOPPAUSE,d0
 pu1
 	DLY5US
-	dbra	  d0,pu1
+	subq.l  #1,D0
+	bne.s	  pu1
 	move.l	(sp)+,d0
 	rts
 

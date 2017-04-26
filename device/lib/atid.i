@@ -30,7 +30,7 @@ TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
 
 LOOPPAUSE  equ   512      ; value for pause loop
 LOOP  equ   $0001FFFF      ; timeout value for ATA
-LOOP3 equ   $0001FFFF       ; timeout value for ATAPI (long)
+LOOP3 equ   $00008FFF       ; timeout value for ATAPI (long)
 TESTBYTE1 equ $B0
 TESTBYTE2 equ $0B
 TESTBYTE3 equ $51

@@ -133,7 +133,7 @@ wfc2
 	beq      wfc1d
 	RATABYTE TF_STATUS,d0               ;clear interrupt line
 	move.w   #LBA28_ACCESS,mdu_lba(a3)  ; this does not limit DVD-Drives! The read/write routine should chop al access <48bit to lba28
-	add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
+	;add.b	   #L,mdu_UnitNum(a3)    ;set the LBA-bit in the unit number
 	clr.l    mdu_sectors_per_track(a3)
 	clr.l    mdu_heads(a3)
 	clr.l    mdu_cylinders(a3)
@@ -232,7 +232,7 @@ lba28ok:
 	move.l   d0,mdu_numlba(a3)    ;store to internal buffer
 	beq      nolba                ;propably no lba support if no lba sectors
 	MOVE.w   #LBA28_ACCESS,mdu_lba(a3)    ;store to internal buffer
-	or.b     #$A0+L,mdu_UnitNum(a3);set the LBA-bit in the unit number
+	or.b     #L,mdu_UnitNum(a3);set the LBA-bit in the unit number
 	move.w   83*2(A5),d0          ;Word 83 Capabilities * LBA48 support check
 	and.w    #$400,d0             ;Bit 10 1=LBA48 Supported
 	beq		   endauto				 ; stay at LBA28

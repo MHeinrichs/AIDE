@@ -99,20 +99,20 @@ MYDEVNAME   MACRO
 	   ENDM
 
 MYTASKNAME   MACRO
-	   DC.B   'ide1.device',0
+	   DC.B   'ide_slave',0
 	   ENDM
 
 MYTASKNAME2   MACRO
-	   DC.B   'ide0.device',0
+	   DC.B   'ide_master',0
 	   ENDM
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.51 (23.04.2017)",13,10,0
+	   dc.b    "IDE.Device 2.52 (26.04.2017)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 51
+REVISION equ 52
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0
