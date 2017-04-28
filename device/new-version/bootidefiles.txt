@@ -1,2 +1,3 @@
 o\bootstrap.o
 o\init.o
+o\debug-wrapper.o

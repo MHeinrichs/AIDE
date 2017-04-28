@@ -1,4 +1,4 @@
-MYPROCSTACKSIZE   EQU   $1800
+MYPROCSTACKSIZE   EQU   $1000
 MYPROCPRI   EQU   5
 MYPRI   EQU   5
 MYTIMEOUTPRI   EQU   0
@@ -6,7 +6,7 @@ MICRODELAY EQU 10
 
 	include "debug/debug-wrapper.i"
 		IFND	DEBUG_DETAIL
-DEBUG_DETAIL	SET	0	;Detail level of debugging.  Zero for none.
+DEBUG_DETAIL	SET	1	;Detail level of debugging.  Zero for none.
 		ENDC
 
 	DEVINIT
@@ -38,14 +38,16 @@ MD_NUMUNITS EQU   $2
 
 	 STRUCTURE MyDev,LIB_SIZE
 	UBYTE    md_Flags
-	UBYTE    pad
+	UBYTE    md_pad,3
 	APTR     md_SysLib
 	APTR     md_DosLib
 	APTR     md_SegList
 	APTR     md_Base      ; Base address of this device's expansion board
 	APTR     md_ATARdWt
-	APTR		 md_task
 	STRUCT   md_Units,MD_NUMUNITS*4
+	STRUCT	 md_UnitSigBit,MD_NUMUNITS*4
+	STRUCT   md_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
+	STRUCT   md_stack,MYPROCSTACKSIZE
 	LABEL    MyDev_Sizeof
 
 	 STRUCTURE MyDevUnit,UNIT_SIZE ;34 byte-> 2 byte missing for lon
@@ -87,8 +89,6 @@ MD_NUMUNITS EQU   $2
 	APTR     mdu_msgport
 	APTR     mdu_timeinterrupt
 	APTR     mdu_timerequest
-	STRUCT   mdu_stack,MYPROCSTACKSIZE
-	STRUCT   mdu_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
 	LABEL    MyDevUnit_Sizeof
 
 
@@ -99,20 +99,16 @@ MYDEVNAME   MACRO
 	   ENDM
 
 MYTASKNAME   MACRO
-	   DC.B   'ide_slave',0
-	   ENDM
-
-MYTASKNAME2   MACRO
-	   DC.B   'ide_master',0
+	   DC.B   'ide_task',0
 	   ENDM
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.53 (26.04.2017)",13,10,0
+	   dc.b    "IDE.Device 2.54 (26.04.2017)",13,10,0
 	   ENDM
 
 VERSION equ 2
-REVISION equ 53
+REVISION equ 54
 
 ;DOSNAME      MACRO
 ;      DC.B   'dos.library',0

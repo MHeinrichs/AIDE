@@ -1,3 +1,4 @@
 o\dev.o
 o\rdwt.o
 o\init.o
+o\debug-wrapper.o

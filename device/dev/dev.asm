@@ -111,13 +111,10 @@ initDDescrip:
 
 myName:     MYDEVNAME
 dosName:    DOSNAME
-timerName:	TIMERNAME
 idString: IDSTRINGMACRO ;This is from MYDEVI: include file
 myTaskName: MYTASKNAME
-	cnop 0,4
-myTaskName2: MYTASKNAME2
 	; Force word alignment (even address)
-	ds.w   0
+	cnop 0,4
 Init:
 	DC.L  MyDev_Sizeof      ; data space size
 	DC.L  funcTable         ; pointer to function initializers
@@ -146,9 +143,12 @@ dataTable:
 	INITWORD LIB_VERSION,VERSION
 	INITWORD LIB_REVISION,REVISION
 	INITLONG LIB_IDSTRING,idString
+	INITLONG md_tcb+LN_NAME,myTaskName
+	INITBYTE md_tcb+LN_TYPE,NT_TASK
+	INITBYTE md_tcb+LN_PRI,MYPROCPRI
 	DC.w     0
 initRoutine:
-	movem.l  d1/a0-a1/a3-a5,-(sp) ;Preserve ALL modified registers
+	movem.l  D1-D2/a0-A5,-(sp) ;Preserve ALL modified registers
 	move.l   d0,a5
 ;------------------
 ; DO INITIALIZE THE INTERFACE NOW, macro from INTERFACEI: include file
@@ -166,8 +166,6 @@ init1
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)
   PRINTF 1,<'Original ATARdWT Position: %lx',13,10>,a0
-  lea    cmdtable,a0
-  move.l a0,md_task(a5)
 ;  PRINTF 1,<'Original Task    Position: %lx',13,10>,a0
 ;	MOVE.l ATARdWtLen,d0 ; Länge nach D0 Danke Thor!
 ;	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -181,33 +179,61 @@ init1
 ;  move.l md_ATARdWt(a5),a1
 ;  CALLSYS CopyMem
 ;end_relocate_atardwt:
-;relocate_task:
-;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
-;	MOVE.l #MEMF_PUBLIC!MEMF_CLEAR,d1
-;  CALLSYS AllocMem
-;  tst.l  d0
-;  beq.s  end_relocate_task
-;  move.l d0,md_task(a5)
-;  PRINTF 1,<'Relocated ATARdWT Position: %lx',13,10>,d0
-;  lea    Task_Begin,a0
-;	MOVE.l TaskLen,d0 ; Länge nach D0 Danke Thor!
-;  move.l md_task(a5),a1
-;  CALLSYS CopyMem
-;end_relocate_task:
 ;  cmpi.w #37,LIB_VERSION(a6) ;Kick1.3?
 ;  blt.s end_relocate ;yes= No Cache clear function available!
 ;  CALLSYS CacheClearU
 ;end_relocate
+	moveq.l  #0,D2
+LoopNextUnitSigInit:
+  ;------ Allocate a signal
+   moveq    #-1,d0
+   CALLSYS  AllocSignal 
+   move.b   d0,md_UnitSigBit(A5,D2.w)
+  PRINTF 1,<'I_Unit %lu: Sig: %lu,',13,10>,D2,D0
+   ADDQ.w   #4,D2
+   CMP.w    #MD_NUMUNITS*4,d2
+   BLT  		LoopNextUnitSigInit
+   
+   
+
+	;------ start up the unit task.  We do a trick here --
+	;------ we set his message port to PA_IGNORE until the
+	;------ new task has a change to set it up.
+	;------ We cannot go to sleep here: it would be very nasty
+	;------ if someone else tried to open the unit
+	;------ (exec's OpenDevice has done a Forbid() for us --
+	;------ we depend on this to become single threaded).
+	
+	;------ Initialize the stack information
+  PRINTF 1,<'Setup task',13,10>
+	lea	     md_stack(A5),a0          ; Low end of stack
+	MOVE.l   a0,md_tcb+TC_SPLOWER(A5)
+	lea	     MYPROCSTACKSIZE(a0),a0    ; High end of stack
+	move.l   a0,md_tcb+TC_SPUPPER(A5)
+	move.l   A5,-(A0)                  ; argument -- device ptr (send on stack)
+	move.l   a0,md_tcb+TC_SPREG(A5)
+
+;   Startup the task
+	lea	     md_tcb(A5),a1
+	lea			 Task_Begin(pc),A2
+  PRINTF 1,<'Task code at: %lx',13,10>,A2
+	lea	    -1,a3	  ; generate address error
+		  						; if task ever "returns" (we RemTask() it
+		  						; to get rid of it...)
+	CLEAR    d0
+	LINKSYS  AddTask,md_SysLib(A5)
 
 	move.l   a5,d0
+  PRINTF 1,<'Init end device at: %lx',13,10>,A5
 	bra      init_end
 init_error:
 	moveq    #0,d0
 init_end:
-	movem.l  (sp)+,d1/a0-a1/a3-a5
+	movem.l  (sp)+,D1-D2/a0-A5
 	rts
 
 Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
+	addq.w   #1,LIB_OPENCNT(a6)	;security patch of getting expurget!
 	movem.l  d2-d3/a2-a4,-(sp)
 	move.l   a1,a2                   ; save the iob
 	PRINTF 1,<' Opening device %ld',13,10>,d0
@@ -221,16 +247,16 @@ Open:    ; ( device:a6, iob:a1, unitnum:d0, flags:d1 )
 	beq      opn0
 	bra			 Open_Error
 opn1
-	move.l   #4,d3                   ;set offset for unit table
-	moveq    #0,d0
-	move.b   #1,d0
+	addq.w   #4,d3                   ;set offset for unit table
+	;moveq    #0,d0
+	move.l   #1,d0
 opn0
-	moveq    #0,d2
-	move.b   d0,d2                   ; save unit number
-  PRINTF 1,<' Opening unit: %lx offset %ld',13,10>,d0,d3
+	;moveq    #0,d2
+	move.l   d0,d2                   ; save unit number
+  PRINTF 1,<' Opening unit: %lu offset %lu ',13,10>,d0,d3
 	
 	;------ see if the unit is already initialized
-	lea.l    md_Units(a6,d3.l),a4
+	lea.l    md_Units(a6,d3.w),a4
 	move.l   (a4),d0
 	bne.s    Open_UnitOK
 	;------ Try and conjure up a unit
@@ -246,7 +272,6 @@ Open_UnitOK:
 	move.l   d0,IO_UNIT(a2)
 
 	;------ mark us as having another opener
-	addq.w   #1,LIB_OPENCNT(a6)
 	addq.w   #1,UNIT_OPENCNT(a3)
 	;------ prevent delayed expunges
 	bclr     #LIBB_DELEXP,md_Flags(a6)
@@ -256,7 +281,7 @@ Open_UnitOK:
 	bsr      InitDrive ;Call the IDE drive initialisation routine
 	IFGE	DEBUG_DETAIL-1
 		move.w   mdu_drv_type(a3),d0  ;known drive type
-  	PRINTF 1,<'Init drive ok, drivetype: %ld',13,10>,d0
+  	PRINTF 1,<'Init drive ok, drivetype: %lu',13,10>,d0
   ENDC
 	move.b   #FALSE,mdu_firstcall(a3)
 nav1
@@ -297,20 +322,20 @@ Close:      ;( device:a6, iob:a1 )
 	;------ see if the unit is still in use
 	SUBQ.w   #1,UNIT_OPENCNT(a3)
 
- 	BNE.s    Close_Device
-  BSR      ExpungeUnit
+ 	;BNE.s    Close_Device
+  ;BSR      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
 	MOVEQ.l  #0,d0
   subq.w   #1,LIB_OPENCNT(a6)
 	;------ see if there is anyone left with us open
-  bne.s    Close_End
+  ;bne.s    Close_End
 	;------ see if we have a delayed expunge pending
-  btst     #LIBB_DELEXP,md_Flags(a6)
-  beq.s    Close_End
+  ;btst     #LIBB_DELEXP,md_Flags(a6)
+  ;beq.s    Close_End
 	;------ do the expunge
-  bsr      Expunge
+  ;bsr      Expunge
 Close_End:
 	MOVEM.l  (sp)+,d1/a2-a3
 	RTS
@@ -334,66 +359,55 @@ Close_End:
 
 Expunge:    ;( device: a6 )
 
-	movem.l  d1/d2/a5/a6,-(sp)
-
-	move.l   a6,a5
-
-	move.l   md_SysLib(a5),a6
-	;------ see if anyone has us open
-  tst.w    LIB_OPENCNT(a5)
-
-  beq      go_ahead_expunge
-	;------ it is still open.  set the delayed expunge flag
-  bset     #LIBB_DELEXP,md_Flags(a5)
-  CLEAR    d0
-  bra.s    Expunge_End
-go_ahead_expunge:
-	;------ go ahead and get rid of us.  Store our seglist in d2
-  move.l   md_SegList(a5),d2
-	;------ unlink from device list
-  move.l   a5,a1
-  CALLSYS  Remove
-  move.l   md_DosLib(a5),a1
-  CALLSYS  CloseLibrary
-
-
-	;device specific closings here...
-	move.l 	md_ATARdWt(a5),a1
-  move.l	(a1),d0
-  lea     ATARdWt,a1
-  cmp.l   a1,d0
-  beq.s   no_ata_rdwt_relocate
-
-  move.l	 d0,a1
-	move.l   #ATARdWtLen,d0
-	CALLSYS  FreeMem
-no_ata_rdwt_relocate:
-	move.l 	md_task(a5),a1
- move.l	(a1),d0
- lea     cmdtable,a1
- cmp.l   a1,d0
- beq.s   no_task_relocate
-
- move.l	 d0,a1
-	move.l   #TaskLen,d0
-	CALLSYS  FreeMem
-
-no_task_relocate:
-	;------ free our memory
-  CLEAR   d0
-  CLEAR   d1
-  move.l   a5,a1
-  move.w   LIB_NEGSIZE(a5),d1
-  sub.w    d1,a1
-  add.w    LIB_POSSIZE(a5),d0
-  add.l    d1,d0
-  CALLSYS  FreeMem
-	;------ set up our return value
-	move.l   d2,d0
-Expunge_End:
-  movem.l  (sp)+,d1/d2/a5/a6
-  rts
-
+;	movem.l  d1/d2/a5/a6,-(sp)
+;
+;	move.l   a6,a5
+;
+;	move.l   md_SysLib(a5),a6
+;	;------ see if anyone has us open
+;  tst.w    LIB_OPENCNT(a5)
+;
+;  beq      go_ahead_expunge
+;	;------ it is still open.  set the delayed expunge flag
+;  bset     #LIBB_DELEXP,md_Flags(a5)
+;  CLEAR    d0
+;  bra.s    Expunge_End
+;go_ahead_expunge:
+;	;------ go ahead and get rid of us.  Store our seglist in d2
+;  move.l   md_SegList(a5),d2
+;	;------ unlink from device list
+;  move.l   a5,a1
+;  CALLSYS  Remove
+;  move.l   md_DosLib(a5),a1
+;  CALLSYS  CloseLibrary
+;
+;
+;	;device specific closings here...
+;	move.l 	md_ATARdWt(a5),a1
+;  move.l	(a1),d0
+;  lea     ATARdWt,a1
+;  cmp.l   a1,d0
+;  beq.s   no_ata_rdwt_relocate
+;
+;  move.l	 d0,a1
+;	move.l   #ATARdWtLen,d0
+;	CALLSYS  FreeMem
+;no_ata_rdwt_relocate:
+;	;------ free our memory
+;  CLEAR   d0
+;  CLEAR   d1
+;  move.l   a5,a1
+;  move.w   LIB_NEGSIZE(a5),d1
+;  sub.w    d1,a1
+;  add.w    LIB_POSSIZE(a5),d0
+;  add.l    d1,d0
+;  CALLSYS  FreeMem
+;	;------ set up our return value
+;	move.l   d2,d0
+;Expunge_End:
+;  movem.l  (sp)+,d1/d2/a5/a6
+;  rts
+;
 Null:
 	moveq    #0,d0
 	rts
@@ -416,127 +430,38 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	lea.l    mdu_Init(PC),A1
 	LINKSYS  InitStruct,md_SysLib(a6)
 	PRINTF 1,<'Init Struct passed ',13,10>
-	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
 
-	moveq.l  #0,d0
-	;move.b   d2,d0                   ;unit number
-	cmp.b    #0,d2
-	beq.s    initunit0
-	bset     #MDUB_SLAVE,d0                 ;set slave bit	
-initunit0	
-	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
-	move.l   a6,mdu_Device(a3)       ;initialize device pointer
-	
-	;------ start up the unit task.  We do a trick here --
-	;------ we set his message port to PA_IGNORE until the
-	;------ new task has a change to set it up.
-	;------ We cannot go to sleep here: it would be very nasty
-	;------ if someone else tried to open the unit
-	;------ (exec's OpenDevice has done a Forbid() for us --
-	;------ we depend on this to become single threaded).
-	
-	;------ Initialize the stack information
-	lea	    mdu_stack(a3),a0          ; Low end of stack
-	move.l   a0,mdu_tcb+TC_SPLOWER(a3)
-	lea	    MYPROCSTACKSIZE(a0),a0    ; High end of stack
-	move.l   a0,mdu_tcb+TC_SPUPPER(a3)
-	move.l   a3,-(A0)                  ; argument -- unit ptr (send on stack)
-	move.l   a0,mdu_tcb+TC_SPREG(a3)
-	lea	     mdu_tcb(a3),a0
-	move.l   a0,MP_SIGTASK(a3)
-	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)
-	bne.s    no_name_change
-	lea	     myTaskName2(pc),a0
-	move.l   a0,mdu_tcb+LN_NAME(a3)
-no_name_change:
-	
 	;------ initialize the unit's message port's list
 	lea	    MP_MSGLIST(a3),a0
 	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
 									;work magic on them before use.  (AddPort()
 									;can do this for you)
-
-;   Startup the task
-	lea	     mdu_tcb(a3),a1
-	move.l   md_task(A6),A2
-	adda     #(Task_Begin-cmdtable),A2
-	;lea			 Task_Begin(pc),A2
-	move.l   a3,-(sp)      ; Preserve UNIT pointer
-	lea	    -1,a3	  ; generate address error
-		  						; if task ever "returns" (we RemTask() it
-		  						; to get rid of it...)
-	CLEAR   d0
-	LINKSYS AddTask,md_SysLib(a6)
-	move.l   (sp)+,a3      ; restore UNIT pointer
+									
+	;set up the remaining registers:
+	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
+	move.l   a6,mdu_Device(a3)       ;initialize device pointer
+	lea	     md_tcb(A6),a0					 ;set up the task pointer
+	move.l   a0,MP_SIGTASK(a3)
 	
-;	;set up a message port
-;	
-;	;get memory for the intserver
-;	moveq.l	 #IS_SIZE,d0		get interrupt vector memory
-;	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
-;	LINKSYS  AllocMem,md_SysLib(a6)
-;	tst.l    d0
-;	bne.s    build_interrupt
-;	bsr			 InitUnit_Cleanup
-;	moveq.l  #-1,D0 ;error
-;	bra			 InitUnit_End
-;build_interrupt:
-;	;store and setup
-;	MOVE.l   d0,mdu_timeinterrupt(A3);store interrupt in unit structure (maybe for cleanup)
-;	MOVE.l	 D0,A1 ; put the IV in a1
-;	MOVE.b	 #NT_INTERRUPT,LN_TYPE(a1)
-;	MOVE.b	 #MYTIMEOUTPRI,LN_PRI(a1) ; this is our priority
-;	MOVE.l	 a3,IS_DATA(a1) ;server can see our unit structure
-;	LEA  	   TimeoutServer(pc),A0 ;where the code is
-;	MOVE.l	 a0,IS_CODE(a1)
-;	LEA 	   myName(pc),a0
-;	MOVE.l	 a0,LN_NAME(a1)
-;
-;	;get the memory for the port
-;	moveq.l  #MP_SIZE,d0
-;	move.l   #MEMF_PUBLIC!MEMF_CLEAR,d1
-;	LINKSYS  AllocMem,md_SysLib(a6)
-;	tst.l    D0
-;	bne.s    build_msgport
-;	bsr			 InitUnit_Cleanup
-;	moveq.l  #-1,D0 ;error
-;	bra			 InitUnit_End
-;build_msgport:
-;	;store and setup
-;	move.l   d0,mdu_msgport(A3);store message port in unit structure
-;	move.l	 D0,A1; put the port in a1
-;	move.b	 #PA_SOFTINT,MP_FLAGS(A1)	;soft interrupt
-;	move.l	 mdu_timeinterrupt(A3),MP_SIGTASK(A1); pointer to interrupt vector
-;	move.b	 #NT_MSGPORT,LN_TYPE(a1)	;it's a simple message port
-;	lea	     MP_MSGLIST(A1),a0;init the list
-;	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
-;	;build timer request
-;	move.l	 #IOTV_SIZE,D0
-;	LINKSYS	 CreateIORequest,md_SysLib(a6)
-;	tst.l    D0
-;	bne.s    build_timerrequest
-;	bsr			 InitUnit_Cleanup
-;	moveq.l  #-1,D0 ;error
-;	bra			 InitUnit_End
-;build_timerrequest:
-;	move.l   D0,mdu_timerequest(A3)
-;	move.l   D0,A1
-;  MOVE.w	 #TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
-;	MOVE.l	 #MICRODELAY,IOTV_TIME+TV_MICRO(A1) ;set up delay 
-;	;open timer device
-;	lea			 timerName(pc),A0 ;timer.device
-;	moveq.l	 #0,D0 ;unit 0
-;	moveq.l	 #UNIT_MICROHZ,D1 ; CIA timer
-;  ;the ioRequest is already in A1
-;	LINKSYS  OpenDevice,md_SysLib(a6) ; we should close it somewhere...
-	;------ mark us as ready to go
+	;set up slave-flag and table offset
 	moveq.l  #0,d0
-	btst     #MDUB_SLAVE,mdu_UnitNum(a3)                   ;test unit number
-	beq.s    InitUnit_setUnitAdress
-	moveq.l  #4,d0                   ;set offset for unit 1 (slave)
+	CMP.l    #0,d2
+	beq.s    initunit0
+	bset     #MDUB_SLAVE,d0                 ;set slave bit	
+initunit0		
+	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
+	move.l   D2,D0                   ;copy unitnumber to D0
+  LSL.w    #2,D0                    ;multiply by 4 to get tableoffset into d0
+  move.b   md_UnitSigBit(A6,D0.w),D1 ;get the bit
+  move.b   D1,MP_SIGBIT(a3) ;set it to the message port
+
+
+	;------ mark us as ready to go
 InitUnit_setUnitAdress:
-	PRINTF 1,<'Setting address %lx at offset %ld',13,10>,a3,d0
-	move.l   a3,md_Units(a6,d0.l)    ;set unit table
+	PRINTF 1,<'Setting address %lx at offset %lx',13,10>,a3,d0
+	move.l   a3,md_Units(a6,d0.w)    ;set unit table
+
+  MOVE.b  #PA_SIGNAL,MP_FLAGS(a3) ;Make message port "live"
  
 InitUnit_End:
 	movem.l  (sp)+,d1-d4/a0-a2
@@ -589,8 +514,8 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    ;------ get rid of the unit's task.  We know this is safe
    ;------ because the unit has an open count of zero, so it
    ;------ is 'guaranteed' not in use.
-   lea	 mdu_tcb(a3),a1
-   LINKSYS RemTask,md_SysLib(a6)
+   ;lea	 md_tcb(a3),a1
+   ;LINKSYS RemTask,md_SysLib(a6)
 
    ;------ save the unit number
    moveq   #0,d2
@@ -605,9 +530,9 @@ ExpungeUnit:   ;( a3:unitptr, a6:deviceptr )
    moveq.l  #0,d2
    bra.s   ExpungeUnit_ClearUnit
 ExpungeUnit_Slave:
-   move.l  #4,d2
+   move.w  #4,d2
 ExpungeUnit_ClearUnit:   
-   clr.l   md_Units(a6,d2.l)
+   clr.l   md_Units(a6,d2.w)
    move.l  (sp)+,d2
 	rts
 
@@ -1158,68 +1083,61 @@ myproc_seglist:
     DC.L    0	    ; pointer to next segment
 
 Task_Begin:
-    move.l  ABSEXECBASE,a6
+   MOVE.l   ABSEXECBASE,A6
+   MOVE.l   4(sp),A5           ; device pointer
+   ;init the signal mask in D7
+   MOVEQ.l  #0,D7
+   MOVEQ.l	#0,D2
+   MOVEQ.l	#0,D1
+Task_MaskSignals:
+   MOVE.b   md_UnitSigBit(A5,D2.w),D1
+   bset     D1,D7
+   ADDQ.w		#4,D2
+   CMP.w		#MD_NUMUNITS*4,D2
+   BLT.s 		Task_MaskSignals
+	 ;now set it to D6 and start an initial message process to get the queue free
+	 MOVE.l   D7,D6
+   MOVEQ.l	#0,D2   
+   MOVEQ.l	#0,D1
+	 BRA.s		Proc_Units
 
-    ;------ Grab the argument passed down from our parent
-    move.l  4(sp),a3           ; Unit pointer
-    move.l  mdu_Device(a3),a5  ; Point to device structure
-
-
-    ;------ Allocate a signal
-    moveq   #-1,d0	    ; -1 is any signal at all
-    CALLSYS AllocSignal
-    move.b  d0,MP_SIGBIT(a3)
-    move.b  #PA_SIGNAL,MP_FLAGS(a3) ;Make message port "live"
-    ;------ change the bit number into a mask, and save in d7
-    moveq   #0,d7	;Clear D7
-    bset    d0,d7
-
-    bra.s   Task_StartHere
-
-; OK, kids, we are done with initialization.  We now can start the main loop
-; of the driver.  It goes like this.  Because we had the port marked
-; PA_IGNORE for a while (in InitUnit) we jump to the getmsg code on entry.
-; (The first message will probably be posted BEFORE our task gets a chance
-; to run)
-;------     wait for a message
-;------     lock the device
-;------     get a message.  If no message, unlock device and loop
-;------     dispatch the message
-;------     loop back to get a message
-
-    ;------ no more messages.  back ourselves out.
-Task_Unlock:
-    and.b   #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(a3)
-    ;------ main loop: wait for a new message
-
-Task_MainLoop:
-    move.l  d7,d0
-    CALLSYS Wait
-Task_StartHere:
-    ;------ see if we are stopped
-    btst    #MDUB_STOPPED,UNIT_FLAGS(a3)
-    bne.s   Task_MainLoop	; device is stopped, ignore messages
-    ;------ lock the device
-    bset    #UNITB_ACTIVE,UNIT_FLAGS(a3)
-    bne     Task_MainLoop	; device in use (immediate command?)
-
-
+   ;------ main loop: wait for a new message
+Proc_MainLoop:
+   MOVE.l   D7,D0
+   CALLSYS  Wait
+   MOVE.l   D0,D6 		;save result to somewhere save
+   MOVEQ.l	#0,D2   
+   MOVEQ.l	#0,D1
+Proc_Units:
+   MOVE.b   md_UnitSigBit(A5,D2.w),D1
+   BTST     D1,D6
+   BEQ.s    Proc_Skip
+	 MOVE.l   md_Units(A5,D2.w),A3
+	 BEQ.s		Proc_Skip ;Unit not there (A3 is null?)??
+   BTST     #MDUB_STOPPED,UNIT_FLAGS(A3)
+	 BEQ.s		Proc_Skip ;Unit stopped?
+   BSET     #UNITB_ACTIVE,UNIT_FLAGS(A3)
+   BNE.s    Proc_Skip ;device in use   
+   MOVE.l   A3,A0 ;put the unit( also a port) to A0 for the GetMsg-Call
+Proc_NextMessage:
+   CALLSYS  GetMsg
+   TST.l    D0
+   BEQ.s    Proc_Unlock                   ;no message?
+   ;------ do this request
+   MOVE.l   D0,A1
+   EXG      A5,A6                         ;put device ptr in right place
+   BSR      PerformIO
+   EXG      A5,A6                         ;get syslib back in a6
    ;------ get the next request
-Task_NextMessage:
-    move.l  a3,a0
-    CALLSYS GetMsg
-    tst.l   d0
-    beq     Task_Unlock ; no message?
-
-    ;------ do this request
-    move.l  d0,a1
-    exg     a5,a6	; put device ptr in right place
-    bsr     PerformIO
-    exg     a5,a6	; get syslib back in a6
-
-    bra.s   Task_NextMessage
-;  Public TaskLen
-TaskLen = *-cmdtable    
+   BRA.s    Proc_NextMessage
+   ;------ no more messages.  back ourselves out.
+Proc_Unlock:
+   AND.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(A3)
+Proc_Skip:
+   ADDQ.w		#4,D2
+   CMP.w		#MD_NUMUNITS*4,D2
+   BLT.s		Proc_Units
+	 BRA.s    Proc_MainLoop
  
 ;  ;; unit pointer in a1
 ;TimeoutServer:
@@ -1244,9 +1162,6 @@ TaskLen = *-cmdtable
 	cnop  0,4    
 mdu_Init:
 	; ------ Initialize the unit
-	INITLONG mdu_tcb+LN_NAME,myTaskName
-	INITBYTE mdu_tcb+LN_TYPE,NT_TASK
-	INITBYTE mdu_tcb+LN_PRI,MYPROCPRI
 	INITBYTE MP_FLAGS,PA_IGNORE
 	INITBYTE LN_TYPE,NT_DEVICE
 	INITLONG LN_NAME,myName
