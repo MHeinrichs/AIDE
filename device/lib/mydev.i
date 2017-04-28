@@ -37,16 +37,21 @@ MYDEV_END   EQU 30
 MD_NUMUNITS EQU   $2
 
 	 STRUCTURE MyDev,LIB_SIZE
+   ULONG    md_SysLib
+   ULONG    md_DosLib
+   ULONG    md_SegList
+   ULONG    md_Base      ; Base address of this device's expansion board
+	 APTR     md_ATARdWt
+	 ULONG    md_Unit0mask
+	 ULONG    md_Unit1mask
+	 ULONG    md_Unit0adr
+   ULONG    md_Unit1adr ;this one must be directly after Unit0adr because it will be set by an offset!
+   ULONG    md_Unit0sigbit
+   ULONG    md_Unit1sigbit
 	UBYTE    md_Flags
 	UBYTE    md_pad,3
-	APTR     md_SysLib
-	APTR     md_DosLib
-	APTR     md_SegList
-	APTR     md_Base      ; Base address of this device's expansion board
-	APTR     md_ATARdWt
 	STRUCT   md_Units,MD_NUMUNITS*4
-	STRUCT	 md_UnitSigBit,MD_NUMUNITS*4
-	STRUCT   md_tcb,TC_SIZE	; Task Control Block (TCB) for disk task
+   STRUCT   md_tcb,TC_SIZE             ; TCB for disk task
 	STRUCT   md_stack,MYPROCSTACKSIZE
 	LABEL    MyDev_Sizeof
 

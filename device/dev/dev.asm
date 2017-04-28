@@ -146,7 +146,7 @@ dataTable:
 	INITLONG md_tcb+LN_NAME,myTaskName
 	INITBYTE md_tcb+LN_TYPE,NT_TASK
 	INITBYTE md_tcb+LN_PRI,MYPROCPRI
-	DC.w     0
+	DC.L     0
 initRoutine:
 	movem.l  D1-D2/a0-A5,-(sp) ;Preserve ALL modified registers
 	move.l   d0,a5
@@ -188,41 +188,29 @@ LoopNextUnitSigInit:
   ;------ Allocate a signal
    moveq    #-1,d0
    CALLSYS  AllocSignal 
-   move.b   d0,md_UnitSigBit(A5,D2.w)
-  PRINTF 1,<'I_Unit %lu: Sig: %lu,',13,10>,D2,D0
-   ADDQ.w   #4,D2
-   CMP.w    #MD_NUMUNITS*4,d2
-   BLT  		LoopNextUnitSigInit
-   
-   
-
-	;------ start up the unit task.  We do a trick here --
-	;------ we set his message port to PA_IGNORE until the
-	;------ new task has a change to set it up.
-	;------ We cannot go to sleep here: it would be very nasty
-	;------ if someone else tried to open the unit
-	;------ (exec's OpenDevice has done a Forbid() for us --
-	;------ we depend on this to become single threaded).
-	
+   move.l   d0,md_Unit0sigbit(a5)
+   moveq    #0,d1
+   bset     d0,d1
+   move.l   d1,md_Unit0mask(a5)
+   ;------ Allocate the signal for unit 1
+   moveq    #-1,d0
+   CALLSYS  AllocSignal
+   move.l   d0,md_Unit1sigbit(a5)
+   moveq    #0,d1
+   bset     d0,d1
+   move.l   d1,md_Unit1mask(a5)
 	;------ Initialize the stack information
-  PRINTF 1,<'Setup task',13,10>
-	lea	     md_stack(A5),a0          ; Low end of stack
-	MOVE.l   a0,md_tcb+TC_SPLOWER(A5)
+   lea      md_stack(a5),a0         ;Low end of stack
+   move.l   a0,md_tcb+TC_SPLOWER(a5)
 	lea	     MYPROCSTACKSIZE(a0),a0    ; High end of stack
-	move.l   a0,md_tcb+TC_SPUPPER(A5)
-	move.l   A5,-(A0)                  ; argument -- device ptr (send on stack)
-	move.l   a0,md_tcb+TC_SPREG(A5)
-
-;   Startup the task
-	lea	     md_tcb(A5),a1
-	lea			 Task_Begin(pc),A2
-  PRINTF 1,<'Task code at: %lx',13,10>,A2
-	lea	    -1,a3	  ; generate address error
-		  						; if task ever "returns" (we RemTask() it
-		  						; to get rid of it...)
-	CLEAR    d0
-	LINKSYS  AddTask,md_SysLib(A5)
-
+   move.l   a0,md_tcb+TC_SPUPPER(a5)
+   move.l   a5,-(A0)                  ; argument -- device ptr (send on stack)
+   move.l   a0,md_tcb+TC_SPREG(a5)
+   lea      md_tcb(a5),a1
+   lea      Proc_Begin(PC),a2
+   lea      -1,a3             ;generate address error if task ever "returns".
+   moveq    #0,d0
+   CALLSYS  AddTask  ;A task for doing things...
 	move.l   a5,d0
   PRINTF 1,<'Init end device at: %lx',13,10>,A5
 	bra      init_end
@@ -424,24 +412,21 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	tst.l    d0
 	beq      InitUnit_End
 	move.l   d0,a3
+   move.l   a6,mdu_Device(a3)       ;initialize device pointer
+   ;------ initialize the unit's list
+   lea      MP_MSGLIST(a3),a0
+   NEWLIST  a0
+
+   lea      md_tcb(a6),a1
 	
+   move.l   a1,MP_SIGTASK(a3)
 	moveq.l  #0,d0                   ;Dont need to re-zero it
 	move.l   a3,a2                   ;InitStruct is initializing the UNIT
 	lea.l    mdu_Init(PC),A1
 	LINKSYS  InitStruct,md_SysLib(a6)
-	PRINTF 1,<'Init Struct passed ',13,10>
-
-	;------ initialize the unit's message port's list
-	lea	    MP_MSGLIST(a3),a0
-	NEWLIST  a0			;<- IMPORTANT! Lists MUST! have NEWLIST
-									;work magic on them before use.  (AddPort()
-									;can do this for you)
 									
 	;set up the remaining registers:
 	move.l   md_ATARdWt(a6),mdu_ATARdWt(a3) ; copy the relocated ATARdWt-Routine
-	move.l   a6,mdu_Device(a3)       ;initialize device pointer
-	lea	     md_tcb(A6),a0					 ;set up the task pointer
-	move.l   a0,MP_SIGTASK(a3)
 	
 	;set up slave-flag and table offset
 	moveq.l  #0,d0
@@ -450,19 +435,27 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	bset     #MDUB_SLAVE,d0                 ;set slave bit	
 initunit0		
 	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
-	move.l   D2,D0                   ;copy unitnumber to D0
-  LSL.w    #2,D0                    ;multiply by 4 to get tableoffset into d0
-  move.b   md_UnitSigBit(A6,D0.w),D1 ;get the bit
-  move.b   D1,MP_SIGBIT(a3) ;set it to the message port
+   ;------ save unit pointer and set unit signal bit   
+   cmp.l    #1,d2
+   beq      init_unit_1
+   move.l   a3,md_Unit0adr(a6)
+   move.l   md_Unit0sigbit(a6),d0
+   move.b   d0,MP_SIGBIT(a3)
+   bra      set_default_values
+init_unit_1:
+   move.l   a3,md_Unit1adr(a6)
+   move.l   md_Unit1sigbit(a6),d0
+   move.b   d0,MP_SIGBIT(a3)
+set_default_values:
 
 
 	;------ mark us as ready to go
-InitUnit_setUnitAdress:
-	PRINTF 1,<'Setting address %lx at offset %lx',13,10>,a3,d0
-	move.l   a3,md_Units(a6,d0.w)    ;set unit table
+   move.l   d2,d0                   ;unit number
+   lsl.l    #2,d0
 
-  MOVE.b  #PA_SIGNAL,MP_FLAGS(a3) ;Make message port "live"
+   move.l   a3,md_Units(a6,d0.l)    ;set unit table
  
+   move.b   #PA_SIGNAL,MP_FLAGS(a3)
 InitUnit_End:
 	movem.l  (sp)+,d1-d4/a0-a2
 	rts
@@ -1051,114 +1044,71 @@ Flush_term:
 	bsr      TermIO
 	rts
 
-*****************************************************************************
-;
-; Here begins the task related routines
-;
-; A Task is provided so that queued requests may be processed at
-; a later time.  This is not very justifiable for a ram disk, but
-; is very useful for "real" hardware devices.  Take care with
-; your arbitration of shared hardware with all the multitasking
-; programs that might call you at once.
-;
-; Register Usage
-; ==============
-; a3 -- unit pointer
-; a6 -- syslib pointer
-; a5 -- device pointer
-; a4 -- task (NOT process) pointer
-; d7 -- wait mask
-;----------------------------------------------------------------------
 
-; some dos magic, useful for Processes (not us).  A process is started at
-; the first  executable address  after a segment list.	We hand craft a
-; segment list here.  See the the DOS technical reference if you really
-; need to know more about this.
-; The next instruction after the segment list is the first executable address
-
-    cnop    0,4     ; long word align
-    DC.L    16	    ; segment length -- any number will do (this is 4
-		    ; bytes back from the segment pointer)
+  cnop     0,4                   ; long word allign
+   DC.L     16                   ; segment length -- any number will do
 myproc_seglist:
     DC.L    0	    ; pointer to next segment
 
-Task_Begin:
-   MOVE.l   ABSEXECBASE,A6
-   MOVE.l   4(sp),A5           ; device pointer
-   ;init the signal mask in D7
-   MOVEQ.l  #0,D7
-   MOVEQ.l	#0,D2
-   MOVEQ.l	#0,D1
-Task_MaskSignals:
-   MOVE.b   md_UnitSigBit(A5,D2.w),D1
-   bset     D1,D7
-   ADDQ.w		#4,D2
-   CMP.w		#MD_NUMUNITS*4,D2
-   BLT.s 		Task_MaskSignals
-	 ;now set it to D6 and start an initial message process to get the queue free
-	 MOVE.l   D7,D6
-   MOVEQ.l	#0,D2   
-   MOVEQ.l	#0,D1
-	 BRA.s		Proc_Units
-
+; the next instruction after the segment list is the first executable address
+Proc_Begin:
+   move.l   ABSEXECBASE,a6
+   move.l   4(sp),a5           ; device pointer
+   move.l   md_Unit0mask(a5),d7
+   or.l     md_Unit1mask(a5),d7
+   move.l   md_Unit0adr(a5),a3
+   bsr      Proc_CheckStatus
+   move.l   md_Unit1adr(a5),a3
+   bsr      Proc_CheckStatus
    ;------ main loop: wait for a new message
 Proc_MainLoop:
-   MOVE.l   D7,D0
+   move.l   d7,d0
    CALLSYS  Wait
-   MOVE.l   D0,D6 		;save result to somewhere save
-   MOVEQ.l	#0,D2   
-   MOVEQ.l	#0,D1
-Proc_Units:
-   MOVE.b   md_UnitSigBit(A5,D2.w),D1
-   BTST     D1,D6
-   BEQ.s    Proc_Skip
-	 MOVE.l   md_Units(A5,D2.w),A3
-	 BEQ.s		Proc_Skip ;Unit not there (A3 is null?)??
-   BTST     #MDUB_STOPPED,UNIT_FLAGS(A3)
-	 BEQ.s		Proc_Skip ;Unit stopped?
-   BSET     #UNITB_ACTIVE,UNIT_FLAGS(A3)
-   BNE.s    Proc_Skip ;device in use   
-   MOVE.l   A3,A0 ;put the unit( also a port) to A0 for the GetMsg-Call
-Proc_NextMessage:
-   CALLSYS  GetMsg
-   TST.l    D0
-   BEQ.s    Proc_Unlock                   ;no message?
-   ;------ do this request
-   MOVE.l   D0,A1
-   EXG      A5,A6                         ;put device ptr in right place
-   BSR      PerformIO
-   EXG      A5,A6                         ;get syslib back in a6
+   move.l   d0,-(sp)
+   and.l    md_Unit0mask(a5),d0
+   beq.s    pb3
+   move.l   md_Unit0adr(a5),a3
+   bsr      Proc_CheckStatus
+pb3
+   move.l   (sp)+,d0
+   and.l    md_Unit1mask(a5),d0
+   beq.s    Proc_MainLoop
+   move.l   md_Unit1adr(a5),a3
+   bsr      Proc_CheckStatus
+   bra      Proc_MainLoop
+
+
+Proc_CheckStatus:
+   ;------ is unit initialized?
+   cmp.l    #0,a3
+   bne.s    pcs1
+   rts
+pcs1
+   ;------ see if we are stopped
+   btst     #MDUB_STOPPED,UNIT_FLAGS(a3)
+   beq.s    pcs2
+   rts                                    ;device is stopped
+pcs2
+   ;------ lock the device
+   bset     #UNITB_ACTIVE,UNIT_FLAGS(a3)
+   beq.s    Proc_NextMessage
+   rts                                    ;device in use
    ;------ get the next request
-   BRA.s    Proc_NextMessage
+Proc_NextMessage:
+   move.l   a3,a0
+   CALLSYS  GetMsg
+   tst.l    d0
+   beq.s    Proc_Unlock                   ;no message?
+   ;------ do this request
+   move.l   d0,a1
+   exg      a5,a6                         ;put device ptr in right place
+   bsr      PerformIO
+   exg      a5,a6                         ;get syslib back in a6
+   bra.s    Proc_NextMessage
    ;------ no more messages.  back ourselves out.
 Proc_Unlock:
-   AND.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(A3)
-Proc_Skip:
-   ADDQ.w		#4,D2
-   CMP.w		#MD_NUMUNITS*4,D2
-   BLT.s		Proc_Units
-	 BRA.s    Proc_MainLoop
- 
-;  ;; unit pointer in a1
-;TimeoutServer:
-;	moveq.l		#0,d0	;set no error
-;  CMP.l		  #0,mdu_timeout(A1)
-;  BEQ.s			TimeOut_End
-;  SUBQ.l		#1,mdu_timeout(A1)
-;	MOVEM.l		A0-A2/A6,-(sp)
-;	move.l		mdu_msgport(A1),A0
-;  CALLSYS   GetMsg
-;  tst.l     d0
-;  beq       TimeOut_NoMessage ; no message?
-;  MOVE.l	  d0,a1							; put the port to A1 for ioRequest
-;  MOVE.w	  #TR_ADDREQUEST,IO_COMMAND(A1) ;set up command
-;	MOVE.l	  #MICRODELAY,IOTV_TIME+TV_MICRO(a1) ;set up delay (10ms)
-;	move.l  	mdu_Device(A1),A6  ; Point to device structure
-;  jsr		    _BeginIO  
-;TimeOut_NoMessage:
-;	MOVEM.l		(sp)+,A0-A2/A6
-;TimeOut_End:
-;	rts
+   and.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(a3)
+   rts
 	cnop  0,4    
 mdu_Init:
 	; ------ Initialize the unit
