@@ -188,17 +188,11 @@ LoopNextUnitSigInit:
   ;------ Allocate a signal
    moveq    #-1,d0
    CALLSYS  AllocSignal 
-   move.l   d0,md_Unit0sigbit(a5)
-   moveq    #0,d1
-   bset     d0,d1
-   move.l   d1,md_Unit0mask(a5)
-   ;------ Allocate the signal for unit 1
-   moveq    #-1,d0
-   CALLSYS  AllocSignal
-   move.l   d0,md_Unit1sigbit(a5)
-   moveq    #0,d1
-   bset     d0,d1
-   move.l   d1,md_Unit1mask(a5)
+   move.l   d0,md_UnitSigBit(A5,D2.l)
+   ADDQ.l   #4,D2
+   CMP.l    #MD_NUMUNITS*4,d2
+   BLT.s  		LoopNextUnitSigInit
+
 	;------ Initialize the stack information
    lea      md_stack(a5),a0         ;Low end of stack
    move.l   a0,md_tcb+TC_SPLOWER(a5)
@@ -280,14 +274,14 @@ nav1
 	move.b   #NT_REPLYMSG,LN_TYPE(a2) ;IMPORTANT: Mark IORequest as "complete"
 Open_End
 	PRINTF 1,<'Opend ide.device Result: %lx ',13,10>,d0
-	subq.w   #1,LIB_OPENCNT(a6) ;** End of expunge protection <|>
-	movem.l  (sp)+,d2-d3/a2-a4
-	rts
+	SUBQ.w   #1,LIB_OPENCNT(a6) ;** End of expunge protection <|>
+	MOVEM.l  (sp)+,d2-d3/a2-a4
+	RTS
 Open_Error:
-	bsr      FreeUnit
-	moveq    #IOERR_OPENFAIL,d0
-	move.b   d0,IO_ERROR(a2)
-	move.l   d0,IO_DEVICE(a2)    ;IMPORTANT: trash IO_DEVICE on open failure
+	BSR      FreeUnit
+	MOVEQ    #IOERR_OPENFAIL,d0
+	MOVE.b   d0,IO_ERROR(a2)
+	MOVE.l   d0,IO_DEVICE(a2)    ;IMPORTANT: trash IO_DEVICE on open failure
 	PRINTF 1,<'Open device error',13,10>	
 	bra      Open_End
 
@@ -302,28 +296,27 @@ Close:      ;( device:a6, iob:a1 )
 	MOVE.l   a1,a2
 	MOVE.l   IO_UNIT(a2),a3
 
-	;------ make sure the iob is not used again
-	MOVEQ    #-1,d0
-	MOVE.l   d0,IO_UNIT(a2)
-	MOVE.l   d0,IO_DEVICE(a2)
+  ;make sure the iob is not used again
+  MOVEQ    #-1,d0
+  MOVE.l   d0,IO_UNIT(a2)
+  MOVE.l   d0,IO_DEVICE(a2)
 
-	;------ see if the unit is still in use
-	SUBQ.w   #1,UNIT_OPENCNT(a3)
-
- 	;BNE.s    Close_Device
-  ;BSR      ExpungeUnit
+  ;see if the unit is still in use
+  SUBQ.w   #1,UNIT_OPENCNT(a3)
+  BNE.s    Close_Device
+  BSR      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
 	MOVEQ.l  #0,d0
-  subq.w   #1,LIB_OPENCNT(a6)
+  SUBQ.w   #1,LIB_OPENCNT(a6)
 	;------ see if there is anyone left with us open
-  ;bne.s    Close_End
+  BNE.s    Close_End
 	;------ see if we have a delayed expunge pending
-  ;btst     #LIBB_DELEXP,md_Flags(a6)
-  ;beq.s    Close_End
+  BTST     #LIBB_DELEXP,md_Flags(a6)
+  BEQ.s    Close_End
 	;------ do the expunge
-  ;bsr      Expunge
+  BSR      Expunge
 Close_End:
 	MOVEM.l  (sp)+,d1/a2-a3
 	RTS
@@ -347,55 +340,55 @@ Close_End:
 
 Expunge:    ;( device: a6 )
 
-;	movem.l  d1/d2/a5/a6,-(sp)
-;
-;	move.l   a6,a5
-;
-;	move.l   md_SysLib(a5),a6
-;	;------ see if anyone has us open
-;  tst.w    LIB_OPENCNT(a5)
-;
-;  beq      go_ahead_expunge
-;	;------ it is still open.  set the delayed expunge flag
-;  bset     #LIBB_DELEXP,md_Flags(a5)
-;  CLEAR    d0
-;  bra.s    Expunge_End
-;go_ahead_expunge:
-;	;------ go ahead and get rid of us.  Store our seglist in d2
-;  move.l   md_SegList(a5),d2
-;	;------ unlink from device list
-;  move.l   a5,a1
-;  CALLSYS  Remove
-;  move.l   md_DosLib(a5),a1
-;  CALLSYS  CloseLibrary
-;
-;
-;	;device specific closings here...
-;	move.l 	md_ATARdWt(a5),a1
-;  move.l	(a1),d0
-;  lea     ATARdWt,a1
-;  cmp.l   a1,d0
-;  beq.s   no_ata_rdwt_relocate
-;
-;  move.l	 d0,a1
-;	move.l   #ATARdWtLen,d0
-;	CALLSYS  FreeMem
-;no_ata_rdwt_relocate:
-;	;------ free our memory
-;  CLEAR   d0
-;  CLEAR   d1
-;  move.l   a5,a1
-;  move.w   LIB_NEGSIZE(a5),d1
-;  sub.w    d1,a1
-;  add.w    LIB_POSSIZE(a5),d0
-;  add.l    d1,d0
-;  CALLSYS  FreeMem
-;	;------ set up our return value
-;	move.l   d2,d0
-;Expunge_End:
-;  movem.l  (sp)+,d1/d2/a5/a6
-;  rts
-;
+	movem.l  d1/d2/a5/a6,-(sp)
+
+	move.l   a6,a5
+
+	move.l   md_SysLib(a5),a6
+	;------ see if anyone has us open
+  tst.w    LIB_OPENCNT(a5)
+
+  beq      go_ahead_expunge
+	;------ it is still open.  set the delayed expunge flag
+  bset     #LIBB_DELEXP,md_Flags(a5)
+  CLEAR    d0
+  bra.s    Expunge_End
+go_ahead_expunge:
+	;------ go ahead and get rid of us.  Store our seglist in d2
+  move.l   md_SegList(a5),d2
+	;------ unlink from device list
+  move.l   a5,a1
+  CALLSYS  Remove
+  move.l   md_DosLib(a5),a1
+  CALLSYS  CloseLibrary
+
+
+	;device specific closings here...
+	move.l 	md_ATARdWt(a5),a1
+  move.l	(a1),d0
+  lea     ATARdWt,a1
+  cmp.l   a1,d0
+  beq.s   no_ata_rdwt_relocate
+
+  move.l	 d0,a1
+	move.l   #ATARdWtLen,d0
+	CALLSYS  FreeMem
+no_ata_rdwt_relocate:
+	;------ free our memory
+  CLEAR   d0
+  CLEAR   d1
+  move.l   a5,a1
+  move.w   LIB_NEGSIZE(a5),d1
+  sub.w    d1,a1
+  add.w    LIB_POSSIZE(a5),d0
+  add.l    d1,d0
+  CALLSYS  FreeMem
+	;------ set up our return value
+	move.l   d2,d0
+Expunge_End:
+  movem.l  (sp)+,d1/d2/a5/a6
+  rts
+
 Null:
 	moveq    #0,d0
 	rts
@@ -412,14 +405,14 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	tst.l    d0
 	beq      InitUnit_End
 	move.l   d0,a3
-   move.l   a6,mdu_Device(a3)       ;initialize device pointer
-   ;------ initialize the unit's list
-   lea      MP_MSGLIST(a3),a0
-   NEWLIST  a0
-
-   lea      md_tcb(a6),a1
-	
-   move.l   a1,MP_SIGTASK(a3)
+  MOVE.l   a6,mdu_Device(a3)       ;initialize device pointer
+  ;------ initialize the unit's list
+  LEA      MP_MSGLIST(a3),a0
+  NEWLIST  a0
+  ;------ initialize the unit's taskpointer
+  LEA      md_tcb(a6),a1
+  MOVE.l   a1,MP_SIGTASK(a3)
+  ;------ initialize the unit's rest
 	moveq.l  #0,d0                   ;Dont need to re-zero it
 	move.l   a3,a2                   ;InitStruct is initializing the UNIT
 	lea.l    mdu_Init(PC),A1
@@ -434,31 +427,17 @@ InitUnit:      ;( d2:unit number, a3:scratch, a6:devptr )
 	beq.s    initunit0
 	bset     #MDUB_SLAVE,d0                 ;set slave bit	
 initunit0		
-	move.b   d0,mdu_UnitNum(a3)      ;initialize unit number
-   ;------ save unit pointer and set unit signal bit   
-   cmp.l    #1,d2
-   beq      init_unit_1
-   move.l   a3,md_Unit0adr(a6)
-   move.l   md_Unit0sigbit(a6),d0
-   move.b   d0,MP_SIGBIT(a3)
-   bra      set_default_values
-init_unit_1:
-   move.l   a3,md_Unit1adr(a6)
-   move.l   md_Unit1sigbit(a6),d0
-   move.b   d0,MP_SIGBIT(a3)
-set_default_values:
-
-
-	;------ mark us as ready to go
-   move.l   d2,d0                   ;unit number
-   lsl.l    #2,d0
-
-   move.l   a3,md_Units(a6,d0.l)    ;set unit table
- 
-   move.b   #PA_SIGNAL,MP_FLAGS(a3)
+	MOVE.b   d0,mdu_UnitNum(a3)      ;initialize unit number
+  ;------ save unit pointer and set unit signal bit   
+  MOVE.l   d2,d0                   ;convert unit number to table offset
+  LSL.l    #2,d0
+  MOVE.l   a3,md_Units(a6,d0.l)    ;set unit table
+  MOVE.l   md_UnitSigBit(A6,D0.l),D1 ;get the bit
+  MOVE.b   D1,MP_SIGBIT(a3)
+  MOVE.b   #PA_SIGNAL,MP_FLAGS(a3)
 InitUnit_End:
-	movem.l  (sp)+,d1-d4/a0-a2
-	rts
+  MOVEM.l  (sp)+,d1-d4/a0-a2
+	RTS
 	
 InitUnit_Cleanup: ;( a3:unitptr, a6:deviceptr )
   movem.l   A0-A1,-(sp)
@@ -1045,55 +1024,75 @@ Flush_term:
 	rts
 
 
-  cnop     0,4                   ; long word allign
-   DC.L     16                   ; segment length -- any number will do
+*****************************************************************************
+;
+; Here begins the task related routines
+;
+; A Task is provided so that queued requests may be processed at
+; a later time.  This is not very justifiable for a ram disk, but
+; is very useful for "real" hardware devices.  Take care with
+; your arbitration of shared hardware with all the multitasking
+; programs that might call you at once.
+;
+; Register Usage
+; ==============
+; a3 -- unit pointer
+; a6 -- syslib pointer
+; a5 -- device pointer
+; a4 -- task (NOT process) pointer
+; d7 -- wait mask
+;----------------------------------------------------------------------
+
+; some dos magic, useful for Processes (not us).  A process is started at
+; the first  executable address  after a segment list.	We hand craft a
+; segment list here.  See the the DOS technical reference if you really
+; need to know more about this.
+; The next instruction after the segment list is the first executable address
+
+    cnop    0,4     ; long word align
+    DC.L    16	    ; segment length -- any number will do (this is 4
+		    ; bytes back from the segment pointer)
+
 myproc_seglist:
     DC.L    0	    ; pointer to next segment
 
-; the next instruction after the segment list is the first executable address
 Proc_Begin:
-   move.l   ABSEXECBASE,a6
-   move.l   4(sp),a5           ; device pointer
-   move.l   md_Unit0mask(a5),d7
-   or.l     md_Unit1mask(a5),d7
-   move.l   md_Unit0adr(a5),a3
-   bsr      Proc_CheckStatus
-   move.l   md_Unit1adr(a5),a3
-   bsr      Proc_CheckStatus
+   MOVE.l   ABSEXECBASE,A6
+   MOVE.l   4(sp),A5           ; device pointer
+   ;init the signal mask in D7
+   MOVEQ.l  #0,D7
+   MOVEQ.l	#0,D2
+   MOVEQ.l	#0,D1
+Task_MaskSignals:
+   MOVE.l   md_UnitSigBit(A5,D2.l),D1
+   bset     D1,D7
+   ADDQ.l		#4,D2
+   CMP.l		#MD_NUMUNITS*4,D2
+   BLT.s 		Task_MaskSignals
+	 ;now set it to D6 and start an initial message process to get the queue free
+	 MOVE.l   D7,D0
+	 BRA.s		Proc_Units_First_Call
+
    ;------ main loop: wait for a new message
 Proc_MainLoop:
-   move.l   d7,d0
+   MOVE.l   D7,D0
    CALLSYS  Wait
-   move.l   d0,-(sp)
-   and.l    md_Unit0mask(a5),d0
-   beq.s    pb3
-   move.l   md_Unit0adr(a5),a3
-   bsr      Proc_CheckStatus
-pb3
-   move.l   (sp)+,d0
-   and.l    md_Unit1mask(a5),d0
-   beq.s    Proc_MainLoop
-   move.l   md_Unit1adr(a5),a3
-   bsr      Proc_CheckStatus
-   bra      Proc_MainLoop
-
-
-Proc_CheckStatus:
+Proc_Units_First_Call:   
+   MOVE.l   D0,D6
+   MOVEQ.l	#0,D2
+Proc_Units:
+	 MOVE.L   md_UnitSigBit(A5,D2.l),D1
+   BTST     D1,D6
+   beq.s    Proc_Skip
+   move.l   md_Units(A5,D2.l),A3
    ;------ is unit initialized?
-   cmp.l    #0,a3
-   bne.s    pcs1
-   rts
-pcs1
+   beq.s    Proc_Skip
    ;------ see if we are stopped
    btst     #MDUB_STOPPED,UNIT_FLAGS(a3)
-   beq.s    pcs2
-   rts                                    ;device is stopped
-pcs2
+   BNE.s    Proc_Skip
    ;------ lock the device
    bset     #UNITB_ACTIVE,UNIT_FLAGS(a3)
-   beq.s    Proc_NextMessage
-   rts                                    ;device in use
-   ;------ get the next request
+   BNE.s    Proc_Skip
 Proc_NextMessage:
    move.l   a3,a0
    CALLSYS  GetMsg
@@ -1108,7 +1107,14 @@ Proc_NextMessage:
    ;------ no more messages.  back ourselves out.
 Proc_Unlock:
    and.b    #$ff&(~(UNITF_ACTIVE!UNITF_INTASK)),UNIT_FLAGS(a3)
-   rts
+   
+Proc_Skip
+   ADDQ.l	  #4,D2
+   CMP.l		#MD_NUMUNITS*4,D2
+   BLT.s		Proc_Units
+	 BRA.s    Proc_MainLoop
+	 
+ 
 	cnop  0,4    
 mdu_Init:
 	; ------ Initialize the unit
