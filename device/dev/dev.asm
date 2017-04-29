@@ -162,6 +162,7 @@ initRoutine:
 	move.l   a0,md_SegList(a5)
 
 init1
+	bsr ResetIDE ;first reset IDE and set the NO Interrupt flag
   ;find the location of ATARdWt
   lea    ATARdWt,a0
   move.l a0,md_ATARdWt(a5)

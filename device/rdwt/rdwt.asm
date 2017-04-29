@@ -139,7 +139,8 @@ command48
 wasread48
 	WATABYTE #ATA_READ_SECTORS_EXT,TF_COMMAND	
 
-do_command:  
+do_command:
+	DLY400NS  
 	RATABYTE TF_STATUS,d0			;clears the disabled interrupt
 	;PRINTF 1,<'Command issued Status: %d',13,10>,D0
 	sub.l	 #1,d4				 ;for dbne	
@@ -153,7 +154,7 @@ nextoneblock
 read_block:
 	RATADATAA5_512_BYTES	;destroys d0
 checkerrorforthisblock:
-	;DLY400NS
+	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
 	RATABYTE TF_STATUS,d0			;Also clears the disabled interrupt
 	;PRINTF 1,<'Data transfered! Status: %d',13,10>,D0
 	AND.b   #ERR+DWF+BSY,d0       ;everything fine (not Bsy and no error)?
@@ -484,18 +485,22 @@ pa8
 	btst	  #1,d0											; is the data long alligned?							 
 	beq.s	 pa8a
 	RATADATAA5_D0_BYTES
+	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
 	bra		pa3
 pa8a 
 	RATADATAA5_D0_BYTES_LONG
+	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
 	bra		pa3
 pa9												; write data to drive
 	move.l	d3,d0
 	btst	  #1,d0											; is the data long alligned?							 
 	beq.s		 pa9a
 	WATADATAA5_D0_BYTES
+	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
 	bra		pa3
 pa9a
 	WATADATAA5_D0_BYTES_LONG
+	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
 	bra		pa3
 pa10
 	WAITNOTBSY D1
