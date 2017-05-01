@@ -35,9 +35,8 @@ InitDrive   ;a3 = unitptr
 	move.b   mdu_UnitNum(a3),d0
   PRINTF 1,<'Init drive routine drive: %lx',13,10>,d0
   ENDC
-	bsr      SelectDrive
-	bne			wfc1a														 ;no drive present!
-	move.b   mdu_UnitNum(a3),d0
+	;bsr      SelectDrive
+	;bne			wfc1a														 ;no drive present!	
 ;get memory
 	moveq    #0,d4 ;d4 holds the buffer for now on
 	move.l   ABSEXECBASE,a0
@@ -52,6 +51,7 @@ InitDrive   ;a3 = unitptr
 	bne      notauto
 ;get drive parameters
 	move.w   #CHS_ACCESS,mdu_lba(a3)               ;presumption
+	WATABYTE mdu_UnitNum(a3),TF_DRIVE_HEAD
 	WATABYTE #ATA_IDENTIFY_DRIVE,TF_COMMAND   ;get drive data
 	WAITNOTBSY D1
 	beq      wfc1b
@@ -128,6 +128,7 @@ satapi
 atapi
 	move.w   #ATAPI_DRV,mdu_drv_type(a3)
 wfc2
+	WATABYTE mdu_UnitNum(a3),TF_DRIVE_HEAD
 	WATABYTE #IDENTIFY_PACKET_DEVICE,TF_COMMAND  ;get atapi drive data
 	WAITDRQ  D0
 	beq      wfc1d
@@ -254,6 +255,7 @@ lba32:
 	;currently I support only "LBA32"
 ;	MOVE.l   #$FFFFFFFF,D0  ;store max value to size register
 lba48fine:
+	AND.L    #~(3),D0							;make the blocks devidable by 4!
 	MOVE.l   d0,mdu_numlba48(a3)  ;store to internal buffer
 	AND.l		 #$F0000000,D0         ;>128GB?
 	beq		endauto				 ;LBA48 supported but <128GB: stay at LBA28!
@@ -321,20 +323,20 @@ setupata
 
 ;   cmp.l    #16514064,mdu_numlba(a3)		; devices with less blocks should support the following chs translation
 ;   bge			kr2
-	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
-	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
-	move.l   mdu_heads(a3),d0           ;LBA support
-	subq.b   #1,d0
-	or.b     mdu_UnitNum(a3),d0
+;	move.l   mdu_sectors_per_track(a3),d0  ;send to drive which CHS translation
+;	WATABYTE d0,TF_SECTOR_COUNT         ;to use - important to drives with
+;	move.l   mdu_heads(a3),d0           ;LBA support
+;	subq.b   #1,d0
+;	or.b     mdu_UnitNum(a3),d0
 ;	btst.b   #MDUB_SLAVE,mdu_UnitNum(a3)
 ;	beq      pis1
 ;	bset     #MDUB_SLAVE,d0
 ;pis1
-	WATABYTE d0,TF_DRIVE_HEAD
-	DLY400NS
-	WAITREADYFORNEWCOMMAND D1,D2 
-	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
-	WAITNOTBSY D1
+;	WATABYTE d0,TF_DRIVE_HEAD
+	;DLY400NS
+	;WAITREADYFORNEWCOMMAND D1,D2 
+;	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
+;	WAITNOTBSY D1
 kr2
 	move.l   d4,d1 ;is there a pointer in buffer?
 	tst.l    d1
@@ -376,7 +378,7 @@ copyendbad
 	Public ResetIDE
 ;SoftwareReset IDE-BUS
 ResetIDE
-	movem.l  d0,-(sp)
+	;movem.l  d0,-(sp)
 	WATABYTE #8+nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
 	move.l	 #16000,d0 ;wait 
 rstwait1:
@@ -388,7 +390,7 @@ rstwait1:
 rstwait2:
 	tst.b	 $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
 	dbne		d0,rstwait2
-	movem.l  (sp)+,d0
+	;movem.l  (sp)+,d0
   rts
   
   ;perform safe switch to act_drv drive

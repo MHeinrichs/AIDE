@@ -317,8 +317,8 @@ ATARdWtLen = *-ATARdWt
 SCSIDirectCmd
 	movem.l  a0-a6/d0-d6,-(sp)
 	move.l	d0,d1 ;save d0 somewhere save
-	jsr		SelectDrive
-	bne		sdc1
+	;jsr		SelectDrive
+	;bne		sdc1
 	move.l	a0,a5
 sdc3
 	and.l	 #$FFFF0000,d0			  ;no more than 64KB at once now :-(
@@ -340,7 +340,8 @@ sdc5
 	move.b	#1,IO_ERROR(a1)
 	cmp.b	 #$FF,mdu_act_Status(a3)			;status = FFh means timeout
 	bne.s	 sdc1
-	WATABYTE #$08,TF_COMMAND			;then reset atapi device
+	WATABYTE mdu_UnitNum(a3),TF_DRIVE_HEAD
+	WATABYTE #ATAPI_DEVICE_RESET,TF_COMMAND			;then reset atapi device
 	DLY400NS
 	WAITNOTBSY D1
 	bra.s	 sdc2
@@ -390,7 +391,7 @@ sdc2
 ;send packet to atapi drive and read/write data if needed
 Packet
 	movem.l  a0-a4/d0-d6,-(sp)
-	clr.l	 mdu_act_Actual(a3)
+	clr.l	   mdu_act_Actual(a3)
 	
 	move.l   #LOOP,D0
 waitreadyforpacket: 
@@ -400,35 +401,34 @@ waitreadyforpacket:
   DLY3US   ; make a processor speed independent minimum delay
   SUBQ.L	 #1,D0
   BNE.S		 waitreadyforpacket 
-	bra		   pretec ;timeout
+	bra		   pa_timeout ;timeout
 readyforpacket: 
 	WATABYTE d2,TF_DRIVE_HEAD			  ;set task file registers
 	WATABYTE #0,TF_SECTOR_COUNT
 	WATABYTE d1,TF_CYLINDER_LOW
-	lsr.w	 #8,d1
+	lsr.w	   #8,d1
 	WATABYTE d1,TF_CYLINDER_HIGH
-	;WATABYTE #nIEN+8,TF_DEVICE_CONTROL
 	WATABYTE #0,TF_FEATURES
-	WAITNOTBSY D0
-	beq		pretec
+	;WAITNOTBSY D0
+	;beq		   pa_timeout
 	WATABYTE #ATA_PACKET,TF_COMMAND	  ;send packet command
 	DLY400NS
 	WAITDRQ  D0
-	beq		pretec
+	beq		   pa_timeout
 	RATABYTE TF_STATUS,d0
-	and.b	 #ERR,d0
-	bne		pa_err
-	lea		mdu_act_cmd(a3),a1					  ;prepare packet
-	clr.l	 (a1)
-	clr.l	 4(a1)
-	clr.l	 8(a1)
-	clr.l	 12(a1)
-	lsr.w	 #1,d3
+	and.b	   #ERR,d0
+	bne		   pa_err
+	lea		   mdu_act_cmd(a3),a1					  ;prepare packet
+	clr.l	   (a1)
+	clr.l	   4(a1)
+	clr.l	   8(a1)
+	clr.l	   12(a1)
+	lsr.w	   #1,d3
 pa2
-	move.w	(a2)+,(a1)+
-	subq.w	#1,d3
-	bne.s	 pa2
-	lea		mdu_act_cmd(a3),a1
+	move.w	 (a2)+,(a1)+
+	subq.w	 #1,d3
+	bne.s	   pa2
+	lea		   mdu_act_cmd(a3),a1
 	WATAWORD (a1)+,TF_DATA				  ;write packet to drive
 	WATAWORD (a1)+,TF_DATA
 	WATAWORD (a1)+,TF_DATA
@@ -436,93 +436,95 @@ pa2
 	WATAWORD (a1)+,TF_DATA
 	WATAWORD (a1)+,TF_DATA
 pa3
-	move.l	#LOOP3,d2						;wait to packet execution result
+	move.l	 #LOOP3,d2						;wait to packet execution result
 pa4
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #BSY_BIT,d0
-	bne.s	 pa4
+	btst	   #BSY_BIT,d0
+	bne.s	   pa4_reenter
 	RATABYTE TF_SECTOR_COUNT,d1
-	and.b	 #3,d1
-	btst	  #3,d0
-	bne		pa5
-	cmp.b	 #3,d1
-	beq.s	 pa6
-	subq.l	#1,d2
-	beq		pretec
-	bsr		pause
-	bra		pa4
+	and.b	   #CD_PAC+IO_PAC,d1
+	btst	   #DRQ_BIT,d0
+	bne		   pa5
+	cmp.b	   #CD_PAC+IO_PAC,d1
+	beq.s	   pa6
+pa4_reenter:	
+	subq.l	 #1,d2
+	beq		   pa_timeout
+	DLY3US
+	;bsr		   pause
+	bra		   pa4
 pa5
-	btst	  #0,d1
-	bne.s	 pa4
+	btst	   #CD_PAC_BIT,d1
+	bne.s	   pa4_reenter
 pa6
 	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	  #BSY_BIT,d0
-	bne.s	 pa4
+	btst	   #BSY_BIT,d0
+	bne.s	   pa4_reenter
 	RATABYTE TF_STATUS,d0
-	and.b	 #DRQ,d0
-	beq		pa10							  ;skip if no data
-	moveq	 #0,d3
+	and.b	   #DRQ,d0
+	beq		   pa10							  ;skip if no data
+	moveq	   #0,d3
 	RATABYTE TF_CYLINDER_HIGH,d3		  ;else read data length
-	lsl.w	 #8,d3
+	lsl.w	   #8,d3
 	RATABYTE TF_CYLINDER_LOW,d3
-	move.l	d3,mdu_act_Actual(a3)
-	btst	  #0,d3
-	beq.s	 pa7
-	addq.l	#1,d3 ;add one, if odd length
+	move.l	 d3,mdu_act_Actual(a3)
+	btst	   #0,d3
+	beq.s	   pa7
+	addq.l	 #1,d3 ;add one, if odd length
 pa7
-	tst.l	 d3								 ;test data length and
-	beq		pa_zero						  ;data buffer address
-	cmp.l	 #0,a5
-	beq		pa_err
-	move.l	a5,d0
-	and.l	 #1,d0
-	bne		pa_err
-	btst.b	#SCSIB_READ_WRITE,mdu_act_Flags(a3)	;read or write required?
-	beq.s	 pa9
+	tst.l	   d3								 ;test data length and
+	beq		   pa_zero						  ;data buffer address
+	cmp.l	   #0,a5
+	beq		   pa_err
+	move.l	 a5,d0
+	and.l	   #1,d0
+	bne		   pa_err
+	btst.b	 #SCSIB_READ_WRITE,mdu_act_Flags(a3)	;read or write required?
+	beq.s	   pa9
 pa8				  
 	; read data from drive
-	move.l	d3,d0
-	btst	  #1,d0											; is the data long alligned?							 
-	beq.s	 pa8a
+	move.l	 d3,d0
+	btst	   #1,d0											; is the data long alligned?							 
+	beq.s	   pa8a
 	RATADATAA5_D0_BYTES
 	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
-	bra		pa3
+	bra		   pa3
 pa8a 
 	RATADATAA5_D0_BYTES_LONG
 	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
-	bra		pa3
+	bra		   pa3
 pa9												; write data to drive
-	move.l	d3,d0
-	btst	  #1,d0											; is the data long alligned?							 
+	move.l	 d3,d0
+	btst	   #1,d0											; is the data long alligned?							 
 	beq.s		 pa9a
 	WATADATAA5_D0_BYTES
 	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
-	bra		pa3
+	bra		   pa3
 pa9a
 	WATADATAA5_D0_BYTES_LONG
 	RATABYTE TF_ALTERNATE_STATUS,d0			;Wait one PIO-Cycle for the result in status by polling alternate status
-	bra		pa3
+	bra		   pa3
 pa10
 	WAITNOTBSY D1
-	beq.s	 pretec
+	beq.s	   pa_timeout
 	RATABYTE TF_STATUS,d1
-	move.b	d1,mdu_act_Status(a3)
-	and.b	 #ERR,d1						  ;test, if error occured
-	bne.s	 pa_err
+	move.b	 d1,mdu_act_Status(a3)
+	and.b	   #ERR,d1						  ;test, if error occured
+	bne.s	   pa_err
 pa11
 	movem.l  (sp)+,a0-a4/d0-d6
 	rts											;return from Packet
 
-pretec											;if timeout, return status=FFh
-	move.b	#$FF,mdu_act_Status(a3)
-	bra.s	 pa11
+pa_timeout											;if timeout, return status=FFh
+	move.b	 #$FF,mdu_act_Status(a3)
+	bra.s	   pa11
 pa_err											;if error, return actual status
 	RATABYTE TF_STATUS,mdu_act_Status(a3)
-	bra.s	 pa11
+	bra.s	   pa11
 
 pa_zero										  ;if zero length occured, return AAh
-	move.b	#$AA,mdu_act_Status(a3)
-	bra.s	 pa11
+	move.b	 #$AA,mdu_act_Status(a3)
+	bra.s	   pa11
 
 	PUBLIC	pause
 pause

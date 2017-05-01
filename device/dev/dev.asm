@@ -112,7 +112,7 @@ initDDescrip:
 myName:     MYDEVNAME
 dosName:    DOSNAME
 idString: IDSTRINGMACRO ;This is from MYDEVI: include file
-myTaskName: MYTASKNAME
+;myTaskName: MYTASKNAME
 	; Force word alignment (even address)
 	cnop 0,4
 Init:
@@ -143,7 +143,7 @@ dataTable:
 	INITWORD LIB_VERSION,VERSION
 	INITWORD LIB_REVISION,REVISION
 	INITLONG LIB_IDSTRING,idString
-	INITLONG md_tcb+LN_NAME,myTaskName
+	INITLONG md_tcb+LN_NAME,myName
 	INITBYTE md_tcb+LN_TYPE,NT_TASK
 	INITBYTE md_tcb+LN_PRI,MYPROCPRI
 	DC.L     0
@@ -304,20 +304,20 @@ Close:      ;( device:a6, iob:a1 )
 
   ;see if the unit is still in use
   SUBQ.w   #1,UNIT_OPENCNT(a3)
-  BNE.s    Close_Device
-  BSR      ExpungeUnit
+  ;BNE.s    Close_Device
+  ;BSR      ExpungeUnit
 
 Close_Device:
 	;------ mark us as having one fewer openers
 	MOVEQ.l  #0,d0
   SUBQ.w   #1,LIB_OPENCNT(a6)
 	;------ see if there is anyone left with us open
-  BNE.s    Close_End
+  ;BNE.s    Close_End
 	;------ see if we have a delayed expunge pending
-  BTST     #LIBB_DELEXP,md_Flags(a6)
-  BEQ.s    Close_End
+  ;BTST     #LIBB_DELEXP,md_Flags(a6)
+  ;BEQ.s    Close_End
 	;------ do the expunge
-  BSR      Expunge
+  ;BSR      Expunge
 Close_End:
 	MOVEM.l  (sp)+,d1/a2-a3
 	RTS
@@ -341,54 +341,54 @@ Close_End:
 
 Expunge:    ;( device: a6 )
 
-	movem.l  d1/d2/a5/a6,-(sp)
-
-	move.l   a6,a5
-
-	move.l   md_SysLib(a5),a6
-	;------ see if anyone has us open
-  tst.w    LIB_OPENCNT(a5)
-
-  beq      go_ahead_expunge
-	;------ it is still open.  set the delayed expunge flag
-  bset     #LIBB_DELEXP,md_Flags(a5)
-  CLEAR    d0
-  bra.s    Expunge_End
-go_ahead_expunge:
-	;------ go ahead and get rid of us.  Store our seglist in d2
-  move.l   md_SegList(a5),d2
-	;------ unlink from device list
-  move.l   a5,a1
-  CALLSYS  Remove
-  move.l   md_DosLib(a5),a1
-  CALLSYS  CloseLibrary
-
-
-	;device specific closings here...
-	move.l 	md_ATARdWt(a5),a1
-  move.l	(a1),d0
-  lea     ATARdWt,a1
-  cmp.l   a1,d0
-  beq.s   no_ata_rdwt_relocate
-
-  move.l	 d0,a1
-	move.l   #ATARdWtLen,d0
-	CALLSYS  FreeMem
-no_ata_rdwt_relocate:
-	;------ free our memory
-  CLEAR   d0
-  CLEAR   d1
-  move.l   a5,a1
-  move.w   LIB_NEGSIZE(a5),d1
-  sub.w    d1,a1
-  add.w    LIB_POSSIZE(a5),d0
-  add.l    d1,d0
-  CALLSYS  FreeMem
-	;------ set up our return value
-	move.l   d2,d0
-Expunge_End:
-  movem.l  (sp)+,d1/d2/a5/a6
-  rts
+;	movem.l  d1/d2/a5/a6,-(sp)
+;
+;	move.l   a6,a5
+;
+;	move.l   md_SysLib(a5),a6
+;	;------ see if anyone has us open
+;  tst.w    LIB_OPENCNT(a5)
+;
+;  beq      go_ahead_expunge
+;	;------ it is still open.  set the delayed expunge flag
+;  bset     #LIBB_DELEXP,md_Flags(a5)
+;  CLEAR    d0
+;  bra.s    Expunge_End
+;go_ahead_expunge:
+;	;------ go ahead and get rid of us.  Store our seglist in d2
+;  move.l   md_SegList(a5),d2
+;	;------ unlink from device list
+;  move.l   a5,a1
+;  CALLSYS  Remove
+;  move.l   md_DosLib(a5),a1
+;  CALLSYS  CloseLibrary
+;
+;
+;	;device specific closings here...
+;	move.l 	md_ATARdWt(a5),a1
+;  move.l	(a1),d0
+;  lea     ATARdWt,a1
+;  cmp.l   a1,d0
+;  beq.s   no_ata_rdwt_relocate
+;
+;  move.l	 d0,a1
+;	move.l   #ATARdWtLen,d0
+;	CALLSYS  FreeMem
+;no_ata_rdwt_relocate:
+;	;------ free our memory
+;  CLEAR   d0
+;  CLEAR   d1
+;  move.l   a5,a1
+;  move.w   LIB_NEGSIZE(a5),d1
+;  sub.w    d1,a1
+;  add.w    LIB_POSSIZE(a5),d0
+;  add.l    d1,d0
+;  CALLSYS  FreeMem
+;	;------ set up our return value
+;	move.l   d2,d0
+;Expunge_End:
+;  movem.l  (sp)+,d1/d2/a5/a6
+;  rts
 
 Null:
 	moveq    #0,d0
@@ -626,8 +626,9 @@ PerformIO:  ; ( iob:a1, unitptr:a3, devptr:a6 )
 ; the device as inactive if this was an immediate request or if the
 ; request was started from the server task.
 TermIO:     ;( iob:a1, unitptr:a3, devptr:a6 )
+	MOVE.l   D1,-(sp)
 	move.w   IO_COMMAND(a1),d0
-	move.l   #IMMEDIATES,d1
+	move.l   #IMMEDIATES,D1
 	btst     d0,d1
 	bne.s    TermIO_Immediate
 	;------ we may need to turn the active bit off.
@@ -642,6 +643,7 @@ TermIO_Immediate:
 	bne.s    TermIO_End
 	LINKSYS  ReplyMsg,md_SysLib(a6)
 TermIO_End:
+	MOVE.l   (sp)+,D1
 	rts
 
 ChangeNum:
@@ -666,7 +668,7 @@ MyCMD:
 	cmp.l    #1,IO_ACTUAL(a1)           ;if io_actual==1 -> motor control
 	bne      MyError
 MyMotor:                               ;park drive heads and stop motor
-	movem.l  d0-d2,-(sp)  
+	movem.l  d0-D1,-(sp)  
 	move.w   mdu_motor(a3),d0
 	move.l   d0,IO_ACTUAL(a1)			;copy a long to IO_ACTUAL(a1)
 	tst.l    IO_LENGTH(a1)
@@ -687,7 +689,7 @@ MyMotor:                               ;park drive heads and stop motor
 	RATABYTE TF_STATUS,d0
 	move.w   #FALSE,mdu_motor(a3)
 mtr1
-	movem.l  (sp)+,d0-d2  
+	movem.l  (sp)+,d0-D1  
 	bsr      TermIO
 	rts
 MyError:
@@ -729,31 +731,31 @@ rkf1
 
 ;emualte scsi packets for ATAPI drive
 EmulateSCSI
-	movem.l  d0/d1/a0/a2/a6,-(sp)
+	movem.l  d0/d1/a0/A2/A4/a6,-(sp)
 	movem.l  d1/a6,-(sp)
-	move.l   IO_DATA(a1),a6
+	MOVE.l   IO_DATA(a1),a6
 	clr.l    IO_ACTUAL(a1)
 	clr.w    scsi_SenseActual(a6)
 	clr.l    scsi_Actual(a6)
 	move.b   #1,scsi_Status(a6)
 	move.l   scsi_Command(a6),a0     ; Which packet to emulate?
-	cmp.b    #$12,(a0)               ; Inquiry
+	cmp.b    #SCSI_INQUIRY,(a0)               ; Inquiry
 	beq      scsi_inq
-	cmp.b    #$25,(a0)               ; Read Recorded Capacity
+	cmp.b    #SCSI_READ_CAPACITY,(a0)               ; Read Recorded Capacity
 	beq      scsi_cap
-	cmp.b    #$1A,(a0)               ; Mode sense(6)
+	cmp.b    #SCSI_MODE_SENSE,(a0)               ; Mode sense(6)
 	beq      scsi_ms
-	cmp.b    #$00,(a0)               ; Test Unit Ready
+	cmp.b    #SCSI_TEST_UNIT_READY,(a0)               ; Test Unit Ready
 	beq      escsi_ok
-	cmp.b    #$08,(a0)               ; Read(6)
+	cmp.b    #SCSI_READ,(a0)               ; Read(6)
 	beq      scsi_r6
 	bra      escsi4
 scsi_r6                             ; Read(6) packet
   PRINTF 1,<'Emulate SCSI Read-Package',13,10>
 	move.l   (a0),d1
-	and.l    #$001FFFFF,d1
-	mulu     #512,d1
-	moveq    #0,d0
+	and.l    #$001FFFFF,D1 ;Mask transfer
+	mulu     #512,D1
+	MOVEQ    #0,d0
 	move.b   4(a0),d0
 	mulu     #512,d0
 	move.l   d0,-(sp)
@@ -766,7 +768,7 @@ scsi_r6                             ; Read(6) packet
 	move.l   mdu_ATARdWt(a3),a1
   jsr      (a1)
 	move.l   (sp)+,a1
-	move.w   (sp)+,IO_COMMAND(a1)
+	MOVE.w   (sp)+,IO_COMMAND(a1)
 	move.l   (sp)+,scsi_Actual(a6)
 	tst.b    d0
 	beq      escsi4
@@ -814,13 +816,6 @@ scsi_cap                               ; Read Recorded Capacity packet
 	cmp.w    #CHS_ACCESS,mdu_lba(a3)
 	beq 		chscapa
 	move.l   mdu_numlba(a3),d0
-;   cmp.w    #LBA28_ACCESS,mdu_lba(a3)
-;   beq 		setcapa
-;   move.l   mdu_numlba48(a3),d1
-;   bra		setcapa ;less than 8 gig->lba28?
-;   and.l	#$0F,d1 ;just take the lower 4 bit! -> should read lba32 ;)
-;   ror.l	#4,d1
-;   or.l     d1,d0
 	bra		setcapa   
 chscapa
 	move.l   mdu_heads(a3),d0
@@ -863,10 +858,10 @@ escsi4
   move.b   scsi_Status(a6),d1
   PRINTF 1,<'Emulate SCSI End. Status= %ld',13,10>,d1
   ENDC
-	movem.l  (sp)+,d1/a6
+  movem.l  (sp)+,d1/a6
 	bsr   TermIO
-	movem.l  (sp)+,d0/d1/a0/a2/a6
-	rts
+	movem.l  (sp)+,d0/d1/a0/a2/A4/a6
+	RTS
 
 
 AbortIO:
@@ -883,8 +878,8 @@ Motor:
 
 MyReset:
 	clr.l    IO_ACTUAL(a1)
+	bsr  		 ResetIDE
 	bsr      TermIO
-	bsr  ResetIDE
 	rts
 AddChangeInt:
 RemChangeInt:
@@ -904,38 +899,39 @@ GetDriveType:
 	rts
 
 td64_read64       ;a1 has the commandstructure
+	movem.l  A0-A4/a6/d2/d5,-(sp)
   PRINTF 2,<'td64_read64',13,10>
-	move.l   #READOPE,a0
+	move.l   #READOPE,A2					;operation type to A2: Read
 	bra      td64j
 td64_write64
   PRINTF 2,<'td64_write64 ',13,10>
 td64_format64
-	move.l   #WRITEOPE,a0
+	movem.l  A0-A4/a6/d2/d5,-(sp)
+	move.l   #WRITEOPE,A2					;operation type to A2: write or format
 td64j
 IO_HIGHOFFSET EQU IO_ACTUAL      ;trackdisk64 
-	move.l   IO_HIGHOFFSET(a1),d0 ; high offset
+	move.l   IO_HIGHOFFSET(a1),D5 ; high offset
 	bra      drwf
 Read:
   PRINTF 2,<'R  '>
-	move.l   #READOPE,a0
+	movem.l  A0-A4/a6/d2/d5,-(sp)
+	move.l   #READOPE,A2					;operation type to A2: Read
 	bra		jee32f
 Write:
 Format:
   PRINTF 2,<'W  '>
-	move.l   #WRITEOPE,a0; write or format
+	movem.l  A0-A4/a6/d2/d5,-(sp)
+	move.l   #WRITEOPE,a2					;operation type to A2: write or format
 jee32f
-	move.l   #0,d0  ;high offset 0
+	move.l   #0,D5  ;high offset 0
 drwf
-	movem.l  a1-a3/a6/d2/d5,-(sp)
-	move.l   a0,a2 ;operation type to A2
-	move.l   d0,d5 ;high bits of offset
-	move.l   IO_UNIT(a1),a3       ; Get unit pointer
+	MOVE.l   IO_UNIT(a1),a3       ; Get unit pointer
 	clr.l    IO_ACTUAL(a1)        ; Initially, no data moved
 	move.l   IO_DATA(a1),a0
 	move.l   IO_LENGTH(a1),d0
+	beq      RdWt_end
 	PRINTF 2,<'length: %lx  '>,d0
 	;------ deal with zero length I/O
-	beq      RdWt_end
 
 	cmp.w    #ATAPI_DRV,mdu_drv_type(a3)
 	beq      Sec_Error            
@@ -950,11 +946,9 @@ drwf
 	bne      Sec_Error
 
 	move.l   d0,IO_ACTUAL(a1)   ;high offset is allready saved to d5
-	move.l   a1,-(sp)
-	move.l   mdu_ATARdWt(a3),a1
-  jsr      (a1)
-	move.l   (sp)+,a1
-	move.w   #TRUE,mdu_motor(a3)  ; Motor will turn on
+	MOVE.l   mdu_ATARdWt(a3),A4
+  jsr      (A4)
+	MOVE.w   #TRUE,mdu_motor(a3)  ; Motor will turn on
 RdWt_Clean:
 	move.b   d0,IO_ERROR(a1)
 	bra      RdWt_end
@@ -962,7 +956,7 @@ Sec_Error:
 	move.b   #IOERR_NOCMD,IO_ERROR(a1)
 RdWt_end:
 	bsr      TermIO
-	movem.l  (sp)+,a1-a3/a6/d2/d5
+	MOVEM.l  (sp)+,A0-A4/a6/d2/d5
 	rts
 
 Update:
@@ -981,26 +975,25 @@ MyStop:
 	
 Start:
 	bsr      InternalStart
-;  move.l   a2,a1                ; TM simul bug
-	bsr      TermIO
+	BSR      TermIO
 	rts
 
 InternalStart:
 	;------ turn processing back on
-	move.l   a1,-(sp)    ; TM simul bug -- save a1
+	MOVEM.l   D1,-(sp)    
 	bclr     #MDUB_STOPPED,UNIT_FLAGS(a3)
 
 	;------ kick the task to start it moving
 	CLEAR    d0
-	move.b   MP_SIGBIT(a3),d1     ;TM
+	move.b   MP_SIGBIT(a3),d1     
 	bset     d1,d0
 	LINKSYS  Signal,md_SysLib(a6)
-	move.l   (sp)+,a1             ; TM simul bug -- restore a1
+	MOVEM.l   (sp)+,D1             
 	rts
 
 
 Flush:
-	movem.l  d2/a1/a6,-(sp)      ; TM simul bug -- save a1
+	movem.l  d2/A0/a1/a6,-(sp)      
 	move.l   md_SysLib(a6),a6
 	bset     #MDUB_STOPPED,UNIT_FLAGS(a3)
 	sne      d2
@@ -1015,13 +1008,12 @@ Flush_Loop:
 	bra.s    Flush_Loop
 Flush_End:
 	move.l   d2,d0
-	movem.l  (sp)+,d2/a1/a6       ; TM simul bug
+	movem.l  (sp)+,d2/A0/a1/a6       
 	tst.b    d0
 	beq.s    Flush_term
 	bsr      InternalStart
 Flush_term:
-;  move.l   a2,a1                ; TM simul bug
-	bsr      TermIO
+	BSR      TermIO
 	rts
 
 
@@ -1098,9 +1090,19 @@ Proc_NextMessage:
    move.l   a3,a0
    CALLSYS  GetMsg
    tst.l    d0
-   beq.s    Proc_Unlock                   ;no message?
+   BEQ.s    Proc_Unlock                   ;no message?
    ;------ do this request
-   move.l   d0,a1
+   move.l   d0,A1
+;   CMP.l	  IO_UNIT(a1),A3  ;right device?!?
+;   BEQ.s    Proc_Allright
+;   ;wrong device: put the message back!
+;   BSR      blink 
+; 	 BSET     #UNITB_INTASK,UNIT_FLAGS(A3)
+;	 bclr     #IOB_QUICK,IO_FLAGS(a1)
+;	 MOVE.l   a3,a0
+;	 CALLSYS  PutMsg
+;	 bra.s    Proc_NextMessage
+;Proc_Allright:
    exg      a5,a6                         ;put device ptr in right place
    bsr      PerformIO
    exg      a5,a6                         ;get syslib back in a6
@@ -1114,6 +1116,25 @@ Proc_Skip
    CMP.l		#MD_NUMUNITS*4,D2
    BLT.s		Proc_Units
 	 BRA.s    Proc_MainLoop
+	 
+blink
+   move.l   d0,-(sp)
+   move.l   #10000,d0
+bl2
+   bset.b   #1,$bfe001 ;Amiga power LED off by CIA pin.
+   SUBQ.l		#1,D0
+   BNE.s		bl2        ;CIA access cycles should be
+                       ;slow on all AMIGAs, because the CIAs
+                       ;are clocked at 700 kHz
+   move.l   #100000,d0 ; will be one more because of dbne
+bl3
+   bclr.b   #1,$bfe001 ;Amiga power LED on
+   SUBQ.l		#1,D0
+   BNE.s		bl3        ;CIA access cycles should be
+   move.l   (sp)+,d0
+bl1
+   rts
+	 
 	 
  
 	cnop  0,4    

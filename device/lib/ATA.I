@@ -49,6 +49,11 @@ CORR_BIT equ    2 ;corrected data
 IDX_BIT  equ    1 ;index
 ERR_BIT  equ    0 ;error
 
+;ATAPI (Packet Command) flags
+CD_PAC   EQU    1
+IO_PAC   EQU    2
+CD_PAC_BIT  EQU    0
+IO_PAC_BIT  EQU    1
 
 ;device control register
                  ;bit3 always 1
@@ -105,3 +110,11 @@ ATA_SET_MULTIPLE equ $C6
 ATA_CHECK_POWER_MODE equ $E5
 ATA_PACKET equ $A0
 ATA_RECALIBRATE equ $10
+ATAPI_DEVICE_RESET EQU $08
+
+;Some SCSI-Commands
+SCSI_INQUIRY EQU $12
+SCSI_READ_CAPACITY EQU $25
+SCSI_MODE_SENSE EQU $1A
+SCSI_TEST_UNIT_READY EQU $00
+SCSI_READ EQU $08
