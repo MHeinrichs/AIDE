@@ -317,9 +317,7 @@ ATARdWtLen = *-ATARdWt
 SCSIDirectCmd
 	movem.l  a0-a6/d0-d6,-(sp)
 	move.l	d0,d1 ;save d0 somewhere save
-	;jsr		SelectDrive
-	;bne		sdc1
-	move.l	a0,a5
+	MOVE.l	a0,a5
 sdc3
 	and.l	 #$FFFF0000,d0			  ;no more than 64KB at once now :-(
 	beq.s	 sdc5						  ;maybe will be fixed later
@@ -409,8 +407,6 @@ readyforpacket:
 	lsr.w	   #8,d1
 	WATABYTE d1,TF_CYLINDER_HIGH
 	WATABYTE #0,TF_FEATURES
-	;WAITNOTBSY D0
-	;beq		   pa_timeout
 	WATABYTE #ATA_PACKET,TF_COMMAND	  ;send packet command
 	DLY400NS
 	WAITDRQ  D0
@@ -457,9 +453,6 @@ pa5
 	btst	   #CD_PAC_BIT,d1
 	bne.s	   pa4_reenter
 pa6
-	RATABYTE TF_ALTERNATE_STATUS,d0
-	btst	   #BSY_BIT,d0
-	bne.s	   pa4_reenter
 	RATABYTE TF_STATUS,d0
 	and.b	   #DRQ,d0
 	beq		   pa10							  ;skip if no data
