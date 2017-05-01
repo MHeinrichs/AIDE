@@ -104,7 +104,7 @@ MYTASKNAME   MACRO
 
 
 IDSTRINGMACRO macro
-	   dc.b    "IDE.Device 2.56 (30.04.2017)",13,10,0
+	   dc.b    "IDE.Device 2.56 (01.05.2017)",13,10,0
 	   ENDM
 
 VERSION equ 2

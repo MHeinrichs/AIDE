@@ -764,10 +764,8 @@ scsi_r6                             ; Read(6) packet
 	move.w   IO_COMMAND(a1),-(sp)
 	move.w   #CMD_READ,IO_COMMAND(a1)
 	move.l   a1,a2
-	move.l   a1,-(sp)
-	move.l   mdu_ATARdWt(a3),a1
-  jsr      (a1)
-	move.l   (sp)+,a1
+	MOVE.l   mdu_ATARdWt(a3),A4
+  jsr      (A4)
 	MOVE.w   (sp)+,IO_COMMAND(a1)
 	move.l   (sp)+,scsi_Actual(a6)
 	tst.b    d0
@@ -831,7 +829,7 @@ setcapa
 	move.l   #8,scsi_Actual(a6)
 	bra      escsi4
 scsi_inq                               ; Inquiry packet
-  PRINTF 1,<'Emulate SCSI Inquiery',13,10>
+  PRINTF 1,<'Emulate SCSI Inquiry ',13,10>
 	move.l   scsi_Length(a6),d0
 	move.l   d0,d1
 	cmp.l    #36,d0
