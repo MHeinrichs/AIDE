@@ -760,7 +760,8 @@ check_status:
 	move.l   #500000,d0	    
 wait_loop:
 	tst.b    $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
-	dbra     d0,wait_loop
+	subq.l	 #1,D0
+	bne.s    wait_loop
 	dbra     d1,check_status             ; check again
 	bra      bad_return_from_find        ; timeout reached: not drive here   
 test_registers:

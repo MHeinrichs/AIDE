@@ -117,7 +117,8 @@ between1andMax
 	;PRINTF 1,<'transfering %lx Blocks at LBA %lx',13,10>,D4,D6
 	;and.l	 #$FF,d4				  ; 256 sectors = 00
 maskd4done	
-	WAITREADYFORNEWCOMMAND D0,D1
+	WAITREADYFORNEWCOMMAND D0;,D1
+	beq		 errcode
 	bsr    setupdrive ;this routine destroys d0-D2
 	;PRINTF 1,<'Drive set up complete!',13,10>
 	CMP.b	 #LBA48_ACCESS,D3 ;D3 holds the info if we access >lba28

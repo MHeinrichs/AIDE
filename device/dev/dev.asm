@@ -686,6 +686,7 @@ MyMotor:                               ;park drive heads and stop motor
 	DLY5US
 	WATABYTE #ATA_STANDBY_IMMEDIATE,TF_COMMAND
 	WAITNOTBSY D1
+	beq      mtr1
 	RATABYTE TF_STATUS,d0
 	move.w   #FALSE,mdu_motor(a3)
 mtr1

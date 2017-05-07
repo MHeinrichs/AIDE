@@ -29,12 +29,12 @@ TF_DRIVE_ADDRESS    equ (Y+TF+$7*REG_INC+CS1)
 
 
 LOOPPAUSE  equ   512      ; value for pause loop
-LOOP  equ   $0001FFFF      ; timeout value for ATA
+LOOP  equ   $0008FFFF      ; timeout value for ATA
 LOOP3 equ   $00FFFFFF       ; timeout value for ATAPI (long)
 TESTBYTE1 equ $B0
 TESTBYTE2 equ $0B
 TESTBYTE3 equ $51
-TIMEOUT   equ $45
+TIMEOUT   equ $30
 ;some of the 32-bit longword error codes rdwt.asm returns:
 BADLENGTH   equ "PELI"
 BADUNIT     equ "MELA"
@@ -107,21 +107,23 @@ wd\@
    SUBQ.L		#1,\1	
    BNE.S    wd\@
 wd1\@
-	;no test needed
+	TST.l		\1
  endm
 
 WAITREADYFORNEWCOMMAND macro
-	move.l	#2*LOOP,\2               ;double time because we wait for bsy to go low and DRDY to go up
+	move.l	#LOOP,\1               ;double time because we wait for bsy to go low and DRDY to go up
 wrfc\@
-  RATABYTE TF_ALTERNATE_STATUS,\1
-	and.b	 #BSY+DRDY+DWF+ERR,\1
-	cmp.b	 #DRDY,\1
-	beq.s	 wrfc1\@
+  BTST	   #DRDY_BIT,TF_ALTERNATE_STATUS
+	BNE.s	   wrfc1\@
+  ;RATABYTE TF_ALTERNATE_STATUS,\2
+	;and.b	 #BSY+DRDY+DWF+ERR,\2
+	;cmp.b	 #DRDY,\2
+	;BEQ.s	 wrfc1\@
   DLY3US   ; make a processor speed independent minimum delay
-  SUBQ.L		#1,\2
+  SUBQ.L		#1,\1
   BNE.S     wrfc\@
 wrfc1\@
-  tst.l    \2
+  tst.l    \1
  endm
 
 

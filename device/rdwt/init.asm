@@ -334,7 +334,7 @@ setupata
 ;pis1
 ;	WATABYTE d0,TF_DRIVE_HEAD
 	;DLY400NS
-	;WAITREADYFORNEWCOMMAND D1,D2 
+	;WAITREADYFORNEWCOMMAND D1;,D2 
 ;	WATABYTE #ATA_INITIALIZE_DRIVE_PARAMETERS,TF_COMMAND  ;get drive data
 ;	WAITNOTBSY D1
 kr2
@@ -379,17 +379,19 @@ copyendbad
 ;SoftwareReset IDE-BUS
 ResetIDE
 	;movem.l  d0,-(sp)
-	WATABYTE #8+nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	move.l	 #16000,d0 ;wait 
+	WATABYTE  #nIEN+SRST,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
+	move.l	  #16000,d0 ;wait 
 rstwait1:
 	DLY5US
-	dbne		d0,rstwait1
+	subq.l    #1,D0
+	bne.s		  rstwait1
 	;release reset
-	WATABYTE #8+nIEN,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
-	move.l	 #120000,d0 ;wait 200ms
+	WATABYTE  #nIEN,TF_DEVICE_CONTROL ;assert reset and INTERRUPT
+	move.l	  #120000,d0 ;wait 200ms
 rstwait2:
 	tst.b	 $bfe301 ;slow CIA access cycle takes 12-20 7MHz clocks: 1.7us - 2.8us
-	dbne		d0,rstwait2
+	subq.l    #1,D0
+	bne.s 	  rstwait2
 	;movem.l  (sp)+,d0
   rts
   
