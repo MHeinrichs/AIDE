@@ -1,7 +1,0 @@
-The ide.device, if here, is propably built for base address $F20000,
-so change it to be the same on the interface board or change it here
-to be what you want.
-
-This new version of ide.device is not checked or tested very thoroughly,
-so it might be buggy.
-
